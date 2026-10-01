@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "id": "evoassist",
+  "version": "${version}",
+  "name": "EvoAssist",
+  "description": "Client-side QoL tools for DiamondWorld Prison Evo.",
+  "authors": ["Konnzy"],
+  "contact": {},
+  "license": "MIT",
+  "icon": "assets/evoassist/icon.png",
+  "environment": "client",
+  "entrypoints": {
+    "modmenu": [
+      "com.konzy.evo_assist.client.compat.EvoModMenu"
+    ],
+    "fabric-datagen": [
+      "com.konzy.evo_assist.client.Evo_assistDataGenerator"
+    ],
+    "client": [
+      "com.konzy.evo_assist.client.Evo_assistClient"
+    ],
+    "main": [
+      "com.konzy.evo_assist.Evo_assist"
+    ]
+  },
+  "mixins": [
+    "evoassist.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=${loader_version}",
+    "fabric-api": "*",
+    "minecraft": "${minecraft_version}",
+    "java": ">=25"
+  }
+}
