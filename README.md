@@ -9,8 +9,6 @@ Client-side Fabric mod for DiamondWorld Prison Evo.
 - Fabric API for Minecraft 26.2
 - Java 25
 
-Resourceful Config 5.0.0 is bundled in the mod JAR.
-
 ## Installation
 
 Copy `EvoAssist-v1.0.0+mc26.2.jar` and Fabric API into the game's `mods` folder. Start Minecraft with the Fabric 26.2 profile.
