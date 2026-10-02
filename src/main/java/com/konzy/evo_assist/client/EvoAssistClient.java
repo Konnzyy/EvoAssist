@@ -206,6 +206,7 @@ public class EvoAssistClient implements ClientModInitializer {
         });
 
         HudElementRegistry.attachElementBefore(VanillaHudElements.CROSSHAIR, WIDGET_LAYER, (context, tickCounter) -> {
+            if (instance.gui.screen() instanceof WidgetScreen) return;
             float tickDelta = tickCounter.getGameTimeDeltaPartialTick(false);
             for (WWidget widget : hudWidgets) {
                 widget.extractRenderState(context, 0, 0, tickDelta);
