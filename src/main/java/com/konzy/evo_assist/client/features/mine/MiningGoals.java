@@ -41,6 +41,13 @@ public final class MiningGoals {
 
         public int target() { return target; }
         public boolean active() { return target > 0; }
+        public boolean hasProgress() {
+            return blocks != 0 || activeMillis != 0 || money != 0 || shards != 0
+                    || complete || pendingPriceBlocks != 0;
+        }
+        public boolean wouldResetProgress(int newTarget) {
+            return active() && !complete && hasProgress() && target != newTarget;
+        }
     }
 
     private static MiningGoals instance;
@@ -66,6 +73,7 @@ public final class MiningGoals {
 
     public Goal blockGoal() { return blocks; }
     public Goal timeGoal() { return time; }
+    public boolean hasProgress() { return blocks.hasProgress() || time.hasProgress(); }
 
     public String previewNotice() {
         if (blocks.active()) return blockNotice(blocks.target);

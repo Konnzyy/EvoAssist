@@ -23,6 +23,7 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
     // Config
     private static final long MAX_LATEST_ACTION_BAR_MS = 10_000;
     private static final long AUTO_PAUSE_AFTER_MS = 5_000;
+    private final MiningStatistics statistics;
     
     public long totalBrokenBlocks = 0;
     public long uptime = 0;
@@ -43,36 +44,59 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
     static Pattern moneyPattern = Pattern.compile("(\\d+(?:\\.\\d+)?[KMBTQ])", Pattern.CASE_INSENSITIVE);
     static Pattern actionBarPattern = Pattern.compile("\\+(\\d+(?:\\.\\d+)?[KMBTQ]?)", Pattern.CASE_INSENSITIVE);
     static Pattern shardMultiplierPattern = Pattern.compile("(\\d+)");
+
+    public BlockProfitPerHour(MiningStatistics statistics) {
+        this.statistics = statistics;
+        refreshStatistics();
+    }
+
+    public void connect(String address) {
+        clearActivity();
+        statistics.connect(address);
+        refreshStatistics();
+    }
+
+    public void disconnect() {
+        statistics.disconnect();
+        clearActivity();
+        refreshStatistics();
+    }
+
     @Override
     public void afterBlockBreak(@NonNull ClientLevel world, @NonNull LocalPlayer playerEntity, @NonNull BlockPos blockPos, @NonNull BlockState blockState) {
+        if (!statistics.isConnected()) return;
         long now = System.currentTimeMillis();
         if(lastBlockBreakAt < 0 || now - lastBlockBreakAt > 2_000) {
             blocksAwaitingPrice = 0;
             MiningGoals.getInstance().expirePendingPrices();
         }
-        totalBrokenBlocks++;
+        record(1, 0, 0);
         lastBlockBreakAt = now;
         paused = false;
         AdditionalGoals.getInstance().blockBroken(!(lastActionBarAt >= 0 && now - lastActionBarAt <= MAX_LATEST_ACTION_BAR_MS));
         boolean pricePending = addMoney(now);
         MiningGoals.getInstance().blockBroken(pricePending);
     }
+    public boolean hasStatistics() {
+        return totalBrokenBlocks != 0 || uptime != 0 || totalMoney != 0 || totalShards != 0;
+    }
+
     public void reset() {
-        totalBrokenBlocks = 0;
-        uptime = 0;
-        totalMoney = 0;
-        totalShards = 0;
+        statistics.reset();
+        clearActivity();
+        refreshStatistics();
+    }
+
+    private void clearActivity() {
         lastBlockBreakAt = -1;
         lastActionBarAt = -1;
         blocksAwaitingPrice = 0;
         latestActionBar = 0;
         latestActionBarTimeout = 100;
         paused = true;
-        BlocksPerHour = 0;
-        MoneyPerHour = 0;
-        ShardsPerHour = 0;
     }
     public void updateActionBar(Component text) {
+        if (!statistics.isConnected()) return;
         Matcher matchingText = actionBarPattern.matcher(text.getString().replaceAll("§.", ""));
         if(matchingText.find()) {
 
@@ -85,9 +109,10 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
                 long now = System.currentTimeMillis();
                 lastActionBarAt = now;
                 if(blocksAwaitingPrice > 0 && lastBlockBreakAt >= 0 && now - lastBlockBreakAt <= 2_000) {
-                    long earned = price * blocksAwaitingPrice;
+                    long earned = price > Long.MAX_VALUE / blocksAwaitingPrice
+                            ? Long.MAX_VALUE : price * blocksAwaitingPrice;
                     if (Arrays.asList(ConfigMining.bphWidgetAllowed).contains(ConfigMining.bphAllowEnum.BLOCKS)) {
-                        totalMoney += earned;
+                        record(0, earned, 0);
                     }
                     MiningGoals.getInstance().priceForPendingBlocks(price);
                 }
@@ -97,7 +122,7 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
     }
 
     public void getMessage(Component text, boolean overlay) {
-        if(overlay) return;
+        if(overlay || !statistics.isConnected()) return;
         String msg = text.getString();
 
         if(msg.startsWith("Вы нашли шард!")) {
@@ -107,11 +132,11 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
                 Matcher matcher = shardMultiplierPattern.matcher(msg);
                 if (matcher.find(1)) {
                     int earned = Integer.parseInt(matcher.group(1));
-                    totalShards += earned;
+                    record(0, 0, earned);
                     MiningGoals.getInstance().shardsEarned(earned);
                 }
             } else {
-                totalShards++;
+                record(0, 0, 1);
                 MiningGoals.getInstance().shardsEarned(1);
             }
         }
@@ -122,7 +147,7 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
             Matcher matchingText = moneyPattern.matcher(text.getString().replaceAll("§.", ""));
             if(matchingText.find()) {
                 long price = MoneyUtils.convertFrom(matchingText.group(1));
-                totalMoney += price;
+                record(0, price, 0);
                 MiningGoals.getInstance().moneyEarned(price);
 
                 latestActionBarTimeout = 0;
@@ -168,7 +193,7 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
     private boolean addMoney(long now) {
         if(lastActionBarAt >= 0 && now - lastActionBarAt <= MAX_LATEST_ACTION_BAR_MS) {
             if (Arrays.asList(ConfigMining.bphWidgetAllowed).contains(ConfigMining.bphAllowEnum.BLOCKS)) {
-                totalMoney += latestActionBar;
+                record(0, latestActionBar, 0);
             }
             MiningGoals.getInstance().moneyEarned(latestActionBar);
             return false;
@@ -183,21 +208,36 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
     }
 
     public void second() {
-        if(paused) return;
-
         if(lastBlockBreakAt < 0 || System.currentTimeMillis() - lastBlockBreakAt >= AUTO_PAUSE_AFTER_MS) {
             paused = true;
-            return;
         }
-        uptime += 1000;
-        MiningGoals.getInstance().activeSecond();
-
-        BlocksPerHour = (long) Math.floor(((double) totalBrokenBlocks) / ((double) uptime / (1000 * 60 * 60)));
-        MoneyPerHour = (long) Math.floor(((double) totalMoney) / ((double) uptime / (1000 * 60 * 60)));
-        ShardsPerHour = (long) Math.floor(((double) totalShards) / ((double) uptime / (1000 * 60 * 60)));
-
-
+        if (!paused && statistics.isConnected()) {
+            statistics.activeSecond();
+            MiningGoals.getInstance().activeSecond();
+        }
+        statistics.tick();
+        refreshStatistics();
     }
 
+    private void record(long blocks, long money, long shards) {
+        statistics.record(blocks, money, shards);
+        refreshTotals();
+    }
+
+    private void refreshTotals() {
+        var totals = statistics.current();
+        totalBrokenBlocks = totals.blocks;
+        totalMoney = totals.money;
+        totalShards = totals.shards;
+        uptime = totals.activeMillis;
+    }
+
+    private void refreshStatistics() {
+        refreshTotals();
+        var rates = statistics.rates();
+        BlocksPerHour = rates.blocks();
+        MoneyPerHour = rates.money();
+        ShardsPerHour = rates.shards();
+    }
 
 }

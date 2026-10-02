@@ -39,6 +39,13 @@ public final class AdditionalGoals {
         private long pendingBlocks;
         public boolean active() { return target.signum() > 0; }
         public boolean running() { return active() && !complete; }
+        public boolean hasProgress() {
+            return progress.signum() != 0 || money.signum() != 0 || blocks != 0 || shards != 0
+                    || activeMillis != 0 || complete || pendingBlocks != 0;
+        }
+        public boolean wouldResetProgress(BigDecimal newTarget) {
+            return active() && !complete && hasProgress() && target.compareTo(newTarget) != 0;
+        }
         private void reset(BigDecimal target) {
             this.target = target;
             progress = BigDecimal.ZERO;
@@ -133,6 +140,9 @@ public final class AdditionalGoals {
 
     public Goal goal(Type type) { return type.clan ? clanGoals().get(type) : mining.get(type); }
     public boolean connected() { return connected; }
+    public boolean hasProgress(boolean clan) {
+        return (clan ? clanGoals() : mining).values().stream().anyMatch(Goal::hasProgress);
+    }
     public static String format(Type type, BigDecimal amount) {
         return type.clan ? RewardMessageParser.whole(amount.longValueExact()) : GoalAmount.format(amount);
     }

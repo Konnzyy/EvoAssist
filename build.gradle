@@ -142,6 +142,15 @@ tasks.register('checkLocalization', JavaExec) {
 
 tasks.named('check') { dependsOn 'checkLocalization' }
 
+tasks.register('checkMiningStatistics', JavaExec) {
+    dependsOn compileRewardChecks
+    classpath = files(sourceSets.main.output, compileRewardChecks.flatMap { it.destinationDirectory })
+    mainClass = 'com.konzy.evo_assist.client.features.mine.blockPH.MiningStatisticsChecks'
+    args layout.buildDirectory.dir('miningChecks').get().asFile.absolutePath
+}
+
+tasks.named('check') { dependsOn 'checkMiningStatistics' }
+
 jar {
     from("LICENSE.txt") {
         rename { "${it}_${project.archives_base_name}" }

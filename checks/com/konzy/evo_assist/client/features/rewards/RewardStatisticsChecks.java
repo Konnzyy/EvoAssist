@@ -40,22 +40,28 @@ public final class RewardStatisticsChecks {
         Path directory = Files.createDirectories(Path.of(args[0]));
         Path file = Files.createTempFile(directory, "reward-check-", ".properties");
         var stats = new RewardStatistics(file, error -> { throw new AssertionError(error); });
+        check(!stats.hasBossStatistics() && !stats.hasClanStatistics(), "No reset data without a server");
         stats.connect("PLAY.EXAMPLE.COM:25565");
+        check(!stats.hasBossStatistics() && !stats.hasClanStatistics(), "Empty server has no reset data");
         stats.receive("+ 3.64B(84% бонус)\n+ 48 \uE365\n+ 1 жетон\n+ 38 очков клана\n+ 4 опыта клана\n+ 5 золота клана(37% бонус)");
         check(stats.current().money.compareTo(new BigDecimal("3640000000")) == 0
                 && stats.current().shards == 48 && stats.current().tokens == 1
                 && stats.current().clanPoints == 38 && stats.current().clanExperience == 4
                 && stats.current().clanGold == 5, "full screenshot batch");
+        check(stats.hasBossStatistics() && stats.hasClanStatistics(), "Rewards enable both resets");
         stats.disconnect();
         stats.receive("+ 100Q");
         stats = new RewardStatistics(file, error -> { throw new AssertionError(error); });
         check(stats.current().money.compareTo(new BigDecimal("3640000000")) == 0, "saved on restart, disconnected messages ignored");
         stats.connect("other.example.com");
+        check(!stats.hasBossStatistics() && !stats.hasClanStatistics(), "Reset availability follows selected server");
         check(stats.current().tokens == 0 && stats.current().clanPoints == 0, "separate server");
         stats.receive("+ 2 жетона");
+        check(stats.hasBossStatistics() && !stats.hasClanStatistics(), "Tokens alone enable only boss reset");
         stats.connect("play.example.com");
         check(stats.current().tokens == 1 && stats.current().clanGold == 5, "restore original server and default port normalization");
         stats.resetBosses();
+        check(!stats.hasBossStatistics() && stats.hasClanStatistics(), "Boss reset disables only its own button");
         check(stats.current().money.signum() == 0 && stats.current().shards == 0
                 && stats.current().tokens == 0 && stats.current().clanPoints == 38, "independent boss reset");
         stats.receive("+ 1K");
@@ -63,6 +69,7 @@ public final class RewardStatisticsChecks {
         stats = new RewardStatistics(file, error -> { throw new AssertionError(error); });
         check(stats.current().clanPoints == 0 && stats.current().clanExperience == 0
                 && stats.current().clanGold == 0 && stats.current().money.compareTo(new BigDecimal("1000")) == 0, "independent clan reset persists");
+        check(stats.hasBossStatistics() && !stats.hasClanStatistics(), "Reset availability restored from saved data");
         stats.connect("other.example.com");
         check(stats.current().tokens == 2, "other server survives resets");
         Files.delete(file);

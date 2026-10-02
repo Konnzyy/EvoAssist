@@ -108,8 +108,8 @@ public abstract class WWidget extends AbstractWidget {
         this.x += deltaX;
         this.y += deltaY;
         if(widgetScreen != null) {
-            this.x = Math.clamp(this.x, 0, widgetScreen.width - width);
-            this.y = Math.clamp(this.y, 0, widgetScreen.height - height);
+            this.x = Math.clamp(this.x, 0, Math.max(0, widgetScreen.width - width));
+            this.y = Math.clamp(this.y, 0, Math.max(0, widgetScreen.height - height));
         }
         setX((int) Math.round(this.x));
         setY((int) Math.round(this.y));

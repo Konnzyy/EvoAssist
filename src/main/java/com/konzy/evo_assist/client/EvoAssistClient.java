@@ -8,6 +8,7 @@ import com.konzy.evo_assist.client.config.Hidden.HudConfig;
 import com.konzy.evo_assist.client.event.ChatGameEvent;
 import com.konzy.evo_assist.client.features.autoclicker.Clicker;
 import com.konzy.evo_assist.client.features.mine.blockPH.BlockProfitPerHour;
+import com.konzy.evo_assist.client.features.mine.blockPH.MiningStatistics;
 import com.konzy.evo_assist.client.features.mine.MiningGoals;
 import com.konzy.evo_assist.client.features.rewards.RewardStatistics;
 import com.konzy.evo_assist.client.features.goals.AdditionalGoals;
@@ -56,7 +57,7 @@ public class EvoAssistClient implements ClientModInitializer {
     private static final KeyMapping.Category CATEGORY = KeyMapping.Category.register(Identifier.fromNamespaceAndPath(MODID, "controls"));
     private static final KeyMapping ClickerBind = new KeyMapping("key.evoassist.autoclicker", GLFW.GLFW_KEY_UNKNOWN, CATEGORY);
     private static final KeyMapping ClickerModeBind = new KeyMapping("key.evoassist.toggle_mode", GLFW.GLFW_KEY_UNKNOWN, CATEGORY);
-    private static final KeyMapping ConfigBind = new KeyMapping("key.evoassist.open_menu", GLFW.GLFW_KEY_INSERT, CATEGORY);
+    private static final KeyMapping ConfigBind = new KeyMapping("key.evoassist.open_menu", GLFW.GLFW_KEY_RIGHT_CONTROL, CATEGORY);
 
     public static Minecraft instance;
     public static EvoAssistClient evoClient;
@@ -106,13 +107,20 @@ public class EvoAssistClient implements ClientModInitializer {
 
         // Event register
 
-        eventBlockProfitPerHour = new BlockProfitPerHour();
+        eventBlockProfitPerHour = new BlockProfitPerHour(new MiningStatistics(
+                FabricLoader.getInstance().getConfigDir().resolve("evoassist_mining.properties"),
+                error -> logger.warn("Could not update mining statistics", error)));
         eventChatGame = new ChatGameEvent();
         ClientPlayerBlockBreakEvents.AFTER.register(eventBlockProfitPerHour);
         ClientReceiveMessageEvents.GAME.register(eventChatGame);
         ClientPlayConnectionEvents.JOIN.register((_, _, client) -> {
-            eventBlockProfitPerHour.reset();
             var server = client.getCurrentServer();
+            String miningServer = server != null ? server.ip : client.getSingleplayerServer() != null
+                    ? "singleplayer:" + client.getSingleplayerServer().getWorldPath(
+                            net.minecraft.world.level.storage.LevelResource.ROOT).toAbsolutePath().normalize()
+                    : "";
+            eventBlockProfitPerHour.connect(miningServer);
+            MiningGoals.getInstance().expirePendingPrices();
             if (server != null) {
                 rewardStatistics.connect(server.ip);
                 AdditionalGoals.getInstance().connect(server.ip);
@@ -123,7 +131,7 @@ public class EvoAssistClient implements ClientModInitializer {
             AdditionalGoals.getInstance().disconnect();
             MiningGoals.getInstance().expirePendingPrices();
             MiningGoals.getInstance().save();
-            eventBlockProfitPerHour.reset();
+            eventBlockProfitPerHour.disconnect();
         });
 
         // Commands
