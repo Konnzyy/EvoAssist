@@ -1,38 +1,36 @@
-# EvoAssist for Minecraft 26.2
+# EvoAssist для Minecraft 26.2
 
-Client-side Fabric mod for DiamondWorld Prison Evo.
+Клиентский Fabric-мод для DiamondWorld режима Prison Evo.
 
-## Requirements
+## Требования
 
 - Minecraft 26.2
-- Fabric Loader 0.19.5 or newer
-- Fabric API for Minecraft 26.2
+- Fabric Loader 0.19.5 или новее
+- Fabric API для Minecraft 26.2
 - Java 25
 
-## Installation
+Resourceful Config 5.0.0 уже встроен в JAR-файл мода.
 
-Copy `EvoAssist-v1.0.0+mc26.2.jar` and Fabric API into the game's `mods` folder. Start Minecraft with the Fabric 26.2 profile.
+## Установка
 
-Press Insert to open the settings, or use Mod Menu. You can assign a different menu key under Interface > Menu settings, using the same binding as Minecraft's Controls screen. The sections are Autoclicker, Bosses, Mine, Mining Goals, Clan, Clan Goals and Interface. Russian and English follow Minecraft's selected language automatically; other languages use the English fallback.
+Скопируйте `EvoAssist-v1.0.0+mc26.2.jar` и Fabric API в папку `mods` вашей игры. Запустите Minecraft с профилем Fabric 26.2.
 
-The autoclicker starts through its assigned key during gameplay and stops when a screen opens. Click mode generates repeated clicks at the selected CPS; Hold mode holds the mouse button until the key is pressed again. Commands: `/evoassist` or `/ea` for settings; `/evoassistwidgets` or `/eaw` for the widget editor. Legacy command aliases remain supported.
+Нажмите **правый Ctrl**, чтобы открыть настройки, либо используйте Mod Menu. Другую клавишу для открытия меню можно назначить в разделе Интерфейс > Настройки Меню, используя такую же систему привязки клавиш, как в настройках управления Minecraft. Доступные категории: Автокликер, Боссы, Шахта, Цели Добычи, Клан, Цели Клана и Интерфейс. Русский и английский языки автоматически выбираются в соответствии с языком Minecraft.
 
-The plus beside the mod title opens the editor for all widgets. While a world is loaded, the editor leaves the game scene sharp and undimmed, allowing other mods' visible HUD elements to be used as positioning references. Other mods may independently hide their widgets when a screen is open. HUD widgets have no background during gameplay; their editor backgrounds show the clickable bounds.
+Автокликер запускается назначенной клавишей во время игры и останавливается при открытии любого экрана. Режим Нажатие выполняет повторяющиеся клики с выбранным значением CPS, а режим Зажатие удерживает кнопку мыши до повторного нажатия назначенной клавиши. Команды: `/evoassist` или `/ea` используются для открытия настроек. `/evoassistwidgets` или `/eaw` для открытия редактора виджетов.
 
-Mining Goals has independent block, active time, money and shard goals. Clan Goals has separate points, gold and experience goals. Completed goals freeze until reset or replaced. Amount targets support decimal abbreviations such as `5.32B` or `5.32K`. Money and shard targets are limited to `999Q`, clan targets to `1M`, and time targets to 9999 minutes. These limits are enforced without being listed in the input hints. Completion notification duration is shared across goal types and adjustable from 1 to 60 seconds. Goal statistics and widget positions survive reconnects and restarts.
+Кнопка с плюсом рядом с названием мода открывает редактор всех виджетов. Если мир уже загружен, редактор оставляет игровую сцену чёткой и не затемняет её, благодаря чему видимые HUD-элементы других модов можно использовать как ориентиры для расположения. Другие моды могут самостоятельно скрывать свои виджеты при открытии экрана. Во время обычной игры HUD-виджеты не имеют фона, а в редакторе фон показывает их кликабельные границы.
 
-Mining totals are saved separately for each server and survive reconnects and restarts until you reset them in the mod menu. The per-hour estimate uses recent mining activity and gradually falls to zero when you stop mining.
+Цели Добычи позволяет отдельно задавать цели по количеству блоков, активному времени, деньгам и шардам. Цели Клана содержит отдельные цели по очкам, золоту и опыту клана. После выполнения цель фиксируется до её сброса или замены. Для числовых целей поддерживаются десятичные сокращения, например `5.32B` или `5.32K`. Максимальное значение для денег и шардов составляет `999Q`, для клановых целей – `1M`, а для времени – 9999 минут. Продолжительность уведомления о выполнении цели является общей для всех типов целей и может быть настроена от 1 до 60 секунд. Статистика целей и позиции виджетов сохраняются после переподключения и перезапуска игры.
 
-Bosses has one widget for money, shards and tokens from boss/dungeon reward messages. Clan has one widget for clan points, experience and gold. Each section has a display switch, an independent statistics reset and a button to edit that widget's position and scale. Hiding the widget does not stop counting. Money uses K, M, B, T and Q with up to two decimals; other rewards use whole numbers. Rewards are saved immediately in `config/evoassist_rewards.properties`, separately for each server address, and survive reconnects and game restarts until manually reset. The parser counts the displayed award, including its bonus; it recognizes server system reward lines starting with +, not player chat or action-bar mining income. Identical system reward lines from other activities would also be included.
+Общая статистика добычи сохраняется отдельно для каждого сервера и остаётся после переподключения и перезапуска игры, пока вы вручную не сбросите её в меню мода. Расчёт добычи в час основывается на недавней активности и постепенно снижается до нуля, если вы перестаёте добывать блоки.
 
-The Fabric mod ID is `evoassist`. Configuration is saved in `config/evoassist.jsonc`; mining goals use `config/evoassist_mining_goals.properties`. This ID change starts with fresh settings and statistics rather than loading files created under `evo_assist`.
+Раздел Боссы содержит один виджет для отображения денег, шардов и токенов, полученных из сообщений о наградах за боссов и подземелья. Раздел Clan содержит один виджет для очков, опыта и золота клана. В каждом разделе есть переключатель отображения, отдельная кнопка сброса статистики и кнопка для изменения положения и масштаба соответствующего виджета. Скрытие виджета не останавливает подсчёт статистики.
 
-## Building
+Для отображения денег используются сокращения K, M, B, T и Q с точностью до двух знаков после запятой. Остальные награды отображаются целыми числами. Награды сразу сохраняются в `config/evoassist_rewards.properties` отдельно и сохраняются после переподключения и перезапуска игры до ручного сброса.
 
-Run `./gradlew build` with Java 25. The mod JAR is generated in `build/libs` (use the file without `-sources`).
+Fabric ID мода – `evoassist`. Конфигурация сохраняется в `config/evoassist.jsonc`, а цели добычи – в `config/evoassist_mining_goals.properties`.
 
-The build runs checks for reward parsing, compact currency formatting, goal limits and persistence, server separation, chat layout bounds, and localized time formatting without launching Minecraft. Both language catalogs are stored under `src/main/resources/assets/evoassist/lang`.
+## Лицензия
 
-## License
-
-Copyright 2026 Konnzy. Original EvoAssist contributions and modifications are offered under the MIT License in `LICENSE.txt`.
+Copyright 2026 Konnzy. Оригинальные компоненты EvoAssist и внесённые изменения распространяются по лицензии MIT, текст которой находится в `LICENSE.txt`.
