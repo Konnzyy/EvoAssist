@@ -155,6 +155,16 @@ jar {
     from("LICENSE.txt") {
         rename { "${it}_${project.archives_base_name}" }
     }
+    from("LICENSE-APACHE-2.0.txt")
+    from("THIRD-PARTY-NOTICES.md")
+}
+
+tasks.named('sourcesJar') {
+    from("LICENSE.txt") {
+        rename { "${it}_${project.archives_base_name}" }
+    }
+    from("LICENSE-APACHE-2.0.txt")
+    from("THIRD-PARTY-NOTICES.md")
 }
 
 // configure the maven publication

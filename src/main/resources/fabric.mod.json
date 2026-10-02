@@ -6,7 +6,7 @@
   "description": "Client-side QoL tools for DiamondWorld Prison Evo.",
   "authors": ["Konnzy"],
   "contact": {},
-  "license": "MIT",
+  "license": ["MIT", "Apache-2.0"],
   "icon": "assets/evoassist/icon.png",
   "environment": "client",
   "entrypoints": {

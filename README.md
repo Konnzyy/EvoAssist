@@ -23,7 +23,7 @@ The plus beside the mod title opens the editor for all widgets. While a world is
 
 Mining Goals has independent block, active time, money and shard goals. Clan Goals has separate points, gold and experience goals. Completed goals freeze until reset or replaced. Amount targets support decimal abbreviations such as `5.32B` or `5.32K`. Money and shard targets are limited to `999Q`, clan targets to `1M`, and time targets to 9999 minutes. These limits are enforced without being listed in the input hints. Completion notification duration is shared across goal types and adjustable from 1 to 60 seconds. Goal statistics and widget positions survive reconnects and restarts.
 
-The mining counter resets when you leave or join a world/server. It starts a fresh session after reconnecting. Configuration and widget positions remain saved.
+Mining totals are saved separately for each server and survive reconnects and restarts until you reset them in the mod menu. The per-hour estimate uses recent mining activity and gradually falls to zero when you stop mining.
 
 Bosses has one widget for money, shards and tokens from boss/dungeon reward messages. Clan has one widget for clan points, experience and gold. Each section has a display switch, an independent statistics reset and a button to edit that widget's position and scale. Hiding the widget does not stop counting. Money uses K, M, B, T and Q with up to two decimals; other rewards use whole numbers. Rewards are saved immediately in `config/evoassist_rewards.properties`, separately for each server address, and survive reconnects and game restarts until manually reset. The parser counts the displayed award, including its bonus; it recognizes server system reward lines starting with +, not player chat or action-bar mining income. Identical system reward lines from other activities would also be included.
 
@@ -37,8 +37,4 @@ The build runs checks for reward parsing, compact currency formatting, goal limi
 
 ## License
 
-Copyright 2026 Konnzy. Licensed under the MIT License; see `LICENSE.txt`.
-
-## Support
-
-[Discord](https://discord.gg/sx4TXM2NX8)
+Copyright 2026 Konnzy. Original EvoAssist contributions and modifications are offered under the MIT License in `LICENSE.txt`.
