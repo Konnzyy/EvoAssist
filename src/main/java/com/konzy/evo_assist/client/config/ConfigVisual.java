@@ -1,3 +1,7 @@
+/*
+ * Modified for EvoAssist by Konnzyy in 2026.
+ * Licensed under the Apache License 2.0.
+ */
 package com.konzy.evo_assist.client.config;
 
 import com.teamresourceful.resourcefulconfig.api.annotations.Category;
