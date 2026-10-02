@@ -14,6 +14,12 @@ public final class ChatTabsLayout {
     private final List<Cell> cells;
     private final int width, height;
 
+    public int height() { return height; }
+    public Cell at(double x, double y) {
+        return cells.stream().filter(cell -> cell.contains(x, y)).findFirst().orElse(null);
+    }
+    public List<Cell> cells() { return cells; }
+    public int width() { return width; }
     public ChatTabsLayout(List<Integer> tabWidths, List<Integer> prefixWidths, boolean vertical) {
         List<Cell> result = new ArrayList<>();
         int x = 0, y = 0;
@@ -28,7 +34,7 @@ public final class ChatTabsLayout {
                 x += w + 2;
             }
         }
-        if (vertical) { x = 0; y = tabWidths.isEmpty() ? 0 : columnRows * 14 + 4; }
+        if (vertical) { y = tabWidths.isEmpty() ? 0 : columnRows * 14 + 4; }
         else if (!tabWidths.isEmpty() && !prefixWidths.isEmpty()) x += 13;
         for (int i = 0; i < prefixWidths.size(); i++) {
             int w = prefixWidths.get(i);
@@ -40,23 +46,16 @@ public final class ChatTabsLayout {
         height = Math.max(1, cells.stream().mapToInt(cell -> cell.y + cell.height).max().orElse(1));
     }
 
-    public List<Cell> cells() { return cells; }
-    public int width() { return width; }
-    public int height() { return height; }
-    public Cell at(double x, double y) {
-        return cells.stream().filter(cell -> cell.contains(x, y)).findFirst().orElse(null);
-    }
-
     public Placement place(int requestedX, int requestedY, double requestedScale, int screenWidth, int screenHeight) {
         int availableWidth = Math.max(1, screenWidth - 4);
         int availableHeight = Math.max(1, screenHeight - 16);
-        double scale = Double.isFinite(requestedScale) ? Math.max(0.3, Math.min(5, requestedScale)) : 1;
+        double scale = Double.isFinite(requestedScale) ? Math.clamp(requestedScale, 0.3, 5) : 1;
         scale = Math.min(scale, Math.min(availableWidth / (double) width, availableHeight / (double) height));
-        int scaledWidth = Math.min(availableWidth, Math.max(1, (int) Math.ceil(width * scale)));
-        int scaledHeight = Math.min(availableHeight, Math.max(1, (int) Math.ceil(height * scale)));
+        int scaledWidth = Math.clamp((int) Math.ceil(width * scale), 1, availableWidth);
+        int scaledHeight = Math.clamp((int) Math.ceil(height * scale), 1, availableHeight);
         int maxX = Math.max(2, screenWidth - scaledWidth - 2);
         int maxY = Math.max(2, screenHeight - scaledHeight - 14);
-        return new Placement(Math.max(2, Math.min(requestedX, maxX)),
-                requestedY < 0 ? maxY : Math.max(2, Math.min(requestedY, maxY)), scale, scaledWidth, scaledHeight);
+        return new Placement(Math.clamp(requestedX, 2, maxX),
+                requestedY < 0 ? maxY : Math.clamp(requestedY, 2, maxY), scale, scaledWidth, scaledHeight);
     }
 }

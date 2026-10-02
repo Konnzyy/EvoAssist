@@ -1,7 +1,8 @@
 package com.konzy.evo_assist.client.ui.widgets;
 
 import static com.konzy.evo_assist.client.util.Texts.tr;
-import com.konzy.evo_assist.client.Evo_assistClient;
+
+import com.konzy.evo_assist.client.EvoAssistClient;
 import com.konzy.evo_assist.client.config.ConfigBosses;
 import com.konzy.evo_assist.client.config.ConfigClan;
 import com.konzy.evo_assist.client.config.Hidden.HudConfig;
@@ -11,6 +12,7 @@ import com.konzy.evo_assist.client.ui.elements.ContextBuilder;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import org.jspecify.annotations.NonNull;
 
 public final class WiRewards extends WWidget {
     private final boolean clan;
@@ -21,8 +23,8 @@ public final class WiRewards extends WWidget {
     }
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
-        if (widgetScreen == null && (!Evo_assistClient.rewardStatistics.isConnected()
+    protected void extractWidgetRenderState(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+        if (widgetScreen == null && (!EvoAssistClient.rewardStatistics.isConnected()
                 || !(clan ? ConfigClan.widgetEnabled : ConfigBosses.widgetEnabled))) {
             hide(true);
             return;
@@ -38,7 +40,7 @@ public final class WiRewards extends WWidget {
                     .addLine(Component.empty(), 0xFFFFFFFF, 26, 1, true)
                     .setX(getX()).setY(getY()).setWidth(width).setHeight(height).build();
         }
-        var totals = Evo_assistClient.rewardStatistics.current();
+        var totals = EvoAssistClient.rewardStatistics.current();
         if (clan) {
             updateLine(0, Component.literal(tr("evoassist.hud.clanPoints") + "§b" + RewardMessageParser.whole(totals.clanPoints)));
             updateLine(1, Component.literal(tr("evoassist.hud.clanExperience") + "§a" + RewardMessageParser.whole(totals.clanExperience)));

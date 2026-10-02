@@ -9,8 +9,6 @@ public final class Clicker {
     private static long lastClickTime;
     private static KeyMapping heldButton;
 
-    private Clicker() {}
-
     public static void stop() {
         ConfigAutoclicker.autoclickerToggle = false;
         releaseHeldButton();
@@ -29,10 +27,10 @@ public final class Clicker {
             stop();
             return;
         }
-        KeyMapping target = ConfigAutoclicker.autoclickerButton == ConfigAutoclicker.ENUMautoclickerButton.RMB
+        KeyMapping target = ConfigAutoclicker.autoclickerButton == ConfigAutoclicker.ENUMAutoClickerButton.RMB
                 ? mc.options.keyUse : mc.options.keyAttack;
         boolean available = ConfigAutoclicker.autoclickerToggle;
-        boolean holdMode = ConfigAutoclicker.autoclickerActivation == ConfigAutoclicker.ENUMautoclickerActivation.HOLD;
+        boolean holdMode = ConfigAutoclicker.autoclickerActivation == ConfigAutoclicker.ENUMAutoClickerActivation.HOLD;
 
         if (!available || !holdMode || heldButton != target) {
             releaseHeldButton();
@@ -49,7 +47,7 @@ public final class Clicker {
         }
 
         long now = System.currentTimeMillis();
-        int cps = Math.max(1, Math.min(20, ConfigAutoclicker.autoclickerCps));
+        int cps = Math.clamp(ConfigAutoclicker.autoclickerCps, 1, 20);
         if (now - lastClickTime >= 1000L / cps) {
             KeyMapping.click(InputConstants.getKey(target.saveString()));
             lastClickTime = now;

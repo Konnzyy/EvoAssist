@@ -1,7 +1,7 @@
 package com.konzy.evo_assist.client.features.goals;
 
 import static com.konzy.evo_assist.client.util.Texts.tr;
-import com.konzy.evo_assist.client.Evo_assistClient;
+import com.konzy.evo_assist.client.EvoAssistClient;
 import com.konzy.evo_assist.client.config.ConfigMining;
 import com.konzy.evo_assist.client.config.ConfigClan;
 import com.konzy.evo_assist.client.features.mine.MiningGoals;
@@ -78,7 +78,7 @@ public final class AdditionalGoals {
                     if (type.clan ? ConfigClan.goalNotifications : ConfigMining.goalNotifications)
                         MiningGoals.getInstance().showNotice(message, type.clan);
                 },
-                error -> Evo_assistClient.logger.warn("Could not update goals", error));
+                error -> EvoAssistClient.logger.warn("Could not update goals", error));
         return instance;
     }
 
@@ -124,7 +124,7 @@ public final class AdditionalGoals {
     }
 
     private EnumMap<Type, Goal> clanGoals() {
-        return clans.computeIfAbsent(currentServer, key -> {
+        return clans.computeIfAbsent(currentServer, _ -> {
             var result = new EnumMap<Type, Goal>(Type.class);
             for (Type type : Type.values()) if (type.clan) result.put(type, new Goal());
             return result;

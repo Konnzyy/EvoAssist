@@ -1,6 +1,6 @@
 package com.konzy.evo_assist.client.ui.widgets;
 
-import com.konzy.evo_assist.client.Evo_assistClient;
+import com.konzy.evo_assist.client.EvoAssistClient;
 import com.konzy.evo_assist.client.chat.ChatPrefix;
 import com.konzy.evo_assist.client.chat.ChatTabManager;
 import com.konzy.evo_assist.client.chat.ChatTabsLayout;
@@ -10,6 +10,7 @@ import com.konzy.evo_assist.client.ui.WidgetScreen;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.MouseButtonEvent;
+import org.jspecify.annotations.NonNull;
 
 public final class WiChatTabs extends WWidget {
     private final Consumer<ChatPrefix> onPrefix;
@@ -26,7 +27,7 @@ public final class WiChatTabs extends WWidget {
     }
 
     private void refreshLayout() {
-        var client = Evo_assistClient.instance;
+        var client = EvoAssistClient.instance;
         layout = new ChatTabsLayout(ChatTabManager.getInstance().getTabs().stream()
                 .map(tab -> client.font.width(tab.name()) + 6).toList(),
                 ChatPrefix.getAll().stream().map(prefix -> client.font.width(prefix.getText()) + 6).toList(),
@@ -45,14 +46,14 @@ public final class WiChatTabs extends WWidget {
     }
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    protected void extractWidgetRenderState(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         hide(widgetScreen == null && !ConfigChat.chatTabsToggle);
         if (hidden) return;
         refreshLayout();
         mouseLocalX = (mouseX - getX()) / scale;
         mouseLocalY = (mouseY - getY()) / scale;
         if (widgetScreen != null) {
-            graphics.text(Evo_assistClient.instance.font, "x" + Math.round(scale * 10) / 10.0,
+            graphics.text(EvoAssistClient.instance.font, "x" + Math.round(scale * 10) / 10.0,
                     getX(), getY() - 10, 0xFFFFFFFF, true);
         }
         // Keep the fitted, rounded bounds for both drawing and hit testing.
@@ -93,12 +94,12 @@ public final class WiChatTabs extends WWidget {
             graphics.fill(x, y + cell.height() - 1, x + cell.width(), y + cell.height(), border);
             graphics.fill(x, y, x + 1, y + cell.height(), border);
             graphics.fill(x + cell.width() - 1, y, x + cell.width(), y + cell.height(), border);
-            graphics.centeredText(Evo_assistClient.instance.font, label, x + cell.width() / 2, y + 2, textColor | 0xFF000000);
+            graphics.centeredText(EvoAssistClient.instance.font, label, x + cell.width() / 2, y + 2, textColor | 0xFF000000);
         }
     }
 
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+    public boolean mouseClicked(@NonNull MouseButtonEvent event, boolean doubleClick) {
         if (widgetScreen != null) return super.mouseClicked(event, doubleClick);
         if (!ConfigChat.chatTabsToggle || event.button() != 0) return false;
         refreshLayout();
@@ -111,15 +112,15 @@ public final class WiChatTabs extends WWidget {
             if (onPrefix != null) onPrefix.accept(prefix);
         } else {
             var tab = manager.getTabs().get(cell.index());
-            if (Evo_assistClient.instance.hasShiftDown()) manager.setBannedTab(tab);
+            if (EvoAssistClient.instance.hasShiftDown()) manager.setBannedTab(tab);
             else manager.setActiveTab(tab);
         }
-        playDownSound(Evo_assistClient.instance.getSoundManager());
+        playDownSound(EvoAssistClient.instance.getSoundManager());
         return true;
     }
 
     @Override
-    protected void onDrag(MouseButtonEvent event, double deltaX, double deltaY) {
+    protected void onDrag(@NonNull MouseButtonEvent event, double deltaX, double deltaY) {
         if (deltaX != 0 || deltaY != 0) bottomAnchored = false;
         super.onDrag(event, deltaX, deltaY);
         refreshLayout();
@@ -127,7 +128,7 @@ public final class WiChatTabs extends WWidget {
 
     @Override
     public void resize(double amount) {
-        saveScale(Math.max(0.3, Math.min(5, scale + Math.signum(amount) * 0.1)));
+        saveScale(Math.clamp(scale + Math.signum(amount) * 0.1, 0.3, 5));
         refreshLayout();
     }
 

@@ -21,7 +21,6 @@ public abstract class ChatFocusMixin extends Screen {
 
     @Inject(method = "mouseClicked", at = @At("RETURN"))
     private void afterMouseClicked(MouseButtonEvent event, boolean doubleClick, CallbackInfoReturnable<Boolean> cir) {
-        // я ебал это говно!!!!!!!!!!!!!!!!!!! надеюсь оно ниче в других модах не поломает кстати..
         if (!input.isMouseOver(event.x(), event.y())) {
             this.setFocused(input);
             input.setFocused(true);

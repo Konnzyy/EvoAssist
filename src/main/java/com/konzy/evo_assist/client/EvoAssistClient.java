@@ -12,7 +12,9 @@ import com.konzy.evo_assist.client.features.mine.MiningGoals;
 import com.konzy.evo_assist.client.features.rewards.RewardStatistics;
 import com.konzy.evo_assist.client.features.goals.AdditionalGoals;
 import com.konzy.evo_assist.client.ui.widgets.WiAdditionalGoal;
+import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.List;
 import net.fabricmc.loader.api.FabricLoader;
 import com.konzy.evo_assist.client.ui.EvoConfigScreen;
 import com.konzy.evo_assist.client.ui.WidgetScreen;
@@ -43,7 +45,7 @@ import org.slf4j.LoggerFactory;
 import java.util.concurrent.atomic.AtomicLong;
 
 
-public class Evo_assistClient implements ClientModInitializer {
+public class EvoAssistClient implements ClientModInitializer {
 
     public static final Logger logger = LoggerFactory.getLogger("EvoAssist");
     public static final String MODID = "evoassist";
@@ -56,11 +58,8 @@ public class Evo_assistClient implements ClientModInitializer {
     private static final KeyMapping ClickerModeBind = new KeyMapping("key.evoassist.toggle_mode", GLFW.GLFW_KEY_UNKNOWN, CATEGORY);
     private static final KeyMapping ConfigBind = new KeyMapping("key.evoassist.open_menu", GLFW.GLFW_KEY_INSERT, CATEGORY);
 
-    // я должен переделать весь этот мусор ^^^
-
-
     public static Minecraft instance;
-    public static Evo_assistClient evoClient;
+    public static EvoAssistClient evoClient;
 
     private WWidget wBlockProfitPH;
     private WWidget wBlockGoal;
@@ -69,6 +68,7 @@ public class Evo_assistClient implements ClientModInitializer {
     private WWidget wBosses;
     private WWidget wClan;
     private final EnumMap<AdditionalGoals.Type, WiAdditionalGoal> additionalGoalWidgets = new EnumMap<>(AdditionalGoals.Type.class);
+    private final List<WWidget> hudWidgets = new ArrayList<>();
     public static RewardStatistics rewardStatistics;
     private boolean widgetsInitialized = false;
     private boolean chatFilterInstalled = false;
@@ -96,9 +96,7 @@ public class Evo_assistClient implements ClientModInitializer {
         Clicker.stop();
         ChatTabManager.getInstance();
 
-        /*
-        * БИНДЫ
-         */
+        //KeyBinds
 
         KeyMappingHelper.registerKeyMapping(ConfigBind);
         KeyMappingHelper.registerKeyMapping(ClickerBind);
@@ -106,15 +104,13 @@ public class Evo_assistClient implements ClientModInitializer {
 
 
 
-        /*
-        * РЕГИСТРАЦИЯ СОБЫТИЙ
-         */
+        // Event register
 
         eventBlockProfitPerHour = new BlockProfitPerHour();
         eventChatGame = new ChatGameEvent();
         ClientPlayerBlockBreakEvents.AFTER.register(eventBlockProfitPerHour);
         ClientReceiveMessageEvents.GAME.register(eventChatGame);
-        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> {
+        ClientPlayConnectionEvents.JOIN.register((_, _, client) -> {
             eventBlockProfitPerHour.reset();
             var server = client.getCurrentServer();
             if (server != null) {
@@ -122,7 +118,7 @@ public class Evo_assistClient implements ClientModInitializer {
                 AdditionalGoals.getInstance().connect(server.ip);
             }
         });
-        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+        ClientPlayConnectionEvents.DISCONNECT.register((_, _) -> {
             rewardStatistics.disconnect();
             AdditionalGoals.getInstance().disconnect();
             MiningGoals.getInstance().expirePendingPrices();
@@ -130,17 +126,8 @@ public class Evo_assistClient implements ClientModInitializer {
             eventBlockProfitPerHour.reset();
         });
 
+        // Commands
 
-        /*
-         * ФИЧИ
-         */
-
-
-
-
-        /*
-         * КОМАНДЫ
-         */
         ClientCommandRegistrationCallback.EVENT.register(((commandDispatcher, commandRegistryAccess) -> {
             commandDispatcher.register(ClientCommands.literal("evoassist").executes(commandContext -> {
                 instance.schedule(() -> instance.gui.setScreen(new EvoConfigScreen(instance.gui.screen())));
@@ -158,54 +145,30 @@ public class Evo_assistClient implements ClientModInitializer {
                 instance.schedule(() -> instance.gui.setScreen(new WidgetScreen()));
                 return 1;
             }));
-            commandDispatcher.register(ClientCommands.literal("evoextras").executes(commandContext -> {
-                instance.schedule(() -> instance.gui.setScreen(new EvoConfigScreen(instance.gui.screen())));
-                return 1;
-            }));
-            commandDispatcher.register(ClientCommands.literal("ex").executes(commandContext -> {
-                instance.schedule(() -> instance.gui.setScreen(new EvoConfigScreen(instance.gui.screen())));
-                return 1;
-            }));
-            commandDispatcher.register(ClientCommands.literal("evoextraswidgets").executes(commandContext -> {
-                instance.schedule(() -> instance.gui.setScreen(new WidgetScreen()));
-                return 1;
-            }));
-            commandDispatcher.register(ClientCommands.literal("exw").executes(commandContext -> {
-                instance.schedule(() -> instance.gui.setScreen(new WidgetScreen()));
-                return 1;
-            }));
         }));
-
-
-
-
-
 
         AtomicLong latestSecond = new AtomicLong(System.currentTimeMillis());
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
-            if (!chatFilterInstalled && client.gui != null && client.gui.hud != null) {
+            if (!chatFilterInstalled) {
                 client.gui.hud.getChat().setVisibleMessageFilter(message ->
                         !com.konzy.evo_assist.client.config.ConfigChat.chatTabsToggle
                                 || ChatTabManager.getInstance().shouldDisplayMessage(message.content()));
                 chatFilterInstalled = true;
             }
-            if(System.currentTimeMillis() - latestSecond.get() >= 1000) { // раз в секунду вызывает всякое
+            if(System.currentTimeMillis() - latestSecond.get() >= 1000) {
                 eventBlockProfitPerHour.second();
 
                 latestSecond.set(System.currentTimeMillis());
             }
 
-            if(!widgetsInitialized && client.player != null) { // инициализация виджетов
+            if(!widgetsInitialized && client.player != null) {
                 initHudWidgets();
                 widgetsInitialized = true;
             }
 
-
-            while (ConfigBind.consumeClick()) { // открытие меню по бинду
+            while (ConfigBind.consumeClick()) {
                 instance.gui.setScreen(new EvoConfigScreen(instance.gui.screen()));
             }
-
-
 
             while (ClickerBind.consumeClick()) {
                 if (ConfigAutoclicker.autoclickerEnabled && client.level != null
@@ -219,9 +182,9 @@ public class Evo_assistClient implements ClientModInitializer {
                         && client.gui.screen() == null) {
                     Clicker.stop();
                     ConfigAutoclicker.autoclickerActivation =
-                            ConfigAutoclicker.autoclickerActivation == ConfigAutoclicker.ENUMautoclickerActivation.SWITCH
-                                    ? ConfigAutoclicker.ENUMautoclickerActivation.HOLD
-                                    : ConfigAutoclicker.ENUMautoclickerActivation.SWITCH;
+                            ConfigAutoclicker.autoclickerActivation == ConfigAutoclicker.ENUMAutoClickerActivation.SWITCH
+                                    ? ConfigAutoclicker.ENUMAutoClickerActivation.HOLD
+                                    : ConfigAutoclicker.ENUMAutoClickerActivation.SWITCH;
                     configurator.saveConfig(Config.class);
                     client.gui.hud.setOverlayMessage(Component.literal(
                             tr("evoassist.clicker.modeNotice", ConfigAutoclicker.autoclickerActivation)), false);
@@ -231,32 +194,18 @@ public class Evo_assistClient implements ClientModInitializer {
         });
 
         HudElementRegistry.attachElementBefore(VanillaHudElements.CROSSHAIR, WIDGET_LAYER, (context, tickCounter) -> {
-                if(wBlockProfitPH != null) {
-                    wBlockProfitPH.extractRenderState(context, 0, 0, tickCounter.getGameTimeDeltaPartialTick(false));
-                }
-                if(wBlockGoal != null) wBlockGoal.extractRenderState(context, 0, 0, tickCounter.getGameTimeDeltaPartialTick(false));
-                if(wTimeGoal != null) wTimeGoal.extractRenderState(context, 0, 0, tickCounter.getGameTimeDeltaPartialTick(false));
-                if(wGoalNotice != null) wGoalNotice.extractRenderState(context, 0, 0, tickCounter.getGameTimeDeltaPartialTick(false));
-                if(wBosses != null) wBosses.extractRenderState(context, 0, 0, tickCounter.getGameTimeDeltaPartialTick(false));
-                if(wClan != null) wClan.extractRenderState(context, 0, 0, tickCounter.getGameTimeDeltaPartialTick(false));
-                for (WiAdditionalGoal widget : additionalGoalWidgets.values())
-                    widget.extractRenderState(context, 0, 0, tickCounter.getGameTimeDeltaPartialTick(false));
+            float tickDelta = tickCounter.getGameTimeDeltaPartialTick(false);
+            for (WWidget widget : hudWidgets) {
+                widget.extractRenderState(context, 0, 0, tickDelta);
+            }
         });
 
     }
 
     public void initHudWidgets() {
-        /*
-         * Виджет счетчика блоков/час
-         */
         if(wBlockProfitPH == null) {
-            wBlockProfitPH = new WiBlockProfitPH(
-                    HudConfig.WidgetBphX,
-                    HudConfig.WidgetBphY,
-                    230, //190
-                    31,
-                    null
-            );
+            wBlockProfitPH = new WiBlockProfitPH(HudConfig.WidgetBphX, HudConfig.WidgetBphY,
+                    230, 31, null);
         } else {
             wBlockProfitPH.setX(HudConfig.WidgetBphX);
             wBlockProfitPH.setY(HudConfig.WidgetBphY);
@@ -309,6 +258,10 @@ public class Evo_assistClient implements ClientModInitializer {
             widget.applyPos();
             widget.setScale(WiAdditionalGoal.configuredScale(type));
         }
+
+        hudWidgets.clear();
+        hudWidgets.addAll(List.of(wBlockProfitPH, wBlockGoal, wTimeGoal, wGoalNotice, wBosses, wClan));
+        hudWidgets.addAll(additionalGoalWidgets.values());
 
     }
 

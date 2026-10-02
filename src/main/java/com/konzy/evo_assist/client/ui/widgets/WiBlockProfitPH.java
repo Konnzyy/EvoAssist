@@ -1,7 +1,8 @@
 package com.konzy.evo_assist.client.ui.widgets;
 
 import static com.konzy.evo_assist.client.util.Texts.tr;
-import com.konzy.evo_assist.client.Evo_assistClient;
+
+import com.konzy.evo_assist.client.EvoAssistClient;
 import com.konzy.evo_assist.client.config.ConfigMining;
 import com.konzy.evo_assist.client.config.Hidden.HudConfig;
 import com.konzy.evo_assist.client.features.mine.blockPH.BlockProfitPerHour;
@@ -12,6 +13,7 @@ import com.konzy.evo_assist.client.util.TimeUtils;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import org.jspecify.annotations.NonNull;
 
 public class WiBlockProfitPH extends WWidget {
     private static final Identifier TEXTURE = Identifier.fromNamespaceAndPath("minecraft", "textures/item/netherite_pickaxe.png");
@@ -20,18 +22,18 @@ public class WiBlockProfitPH extends WWidget {
 
     private BlockProfitPerHour blockProfitPH;
     private long lastUpdateTime = 0;
-    private static final long UPDATE_COOLDOWN = 50; //50мс
+    private static final long UPDATE_COOLDOWN = 50;
 
 
     public WiBlockProfitPH(int x, int y, int width, int height, WidgetScreen widgetScreen) {
         super(x, y, width, height, widgetScreen, HudConfig.WidgetBphScale);
         this.blockProfitPH = BlockProfitPerHour.getInstance();
         if(this.blockProfitPH == null) {
-            this.blockProfitPH = Evo_assistClient.eventBlockProfitPerHour;
+            this.blockProfitPH = EvoAssistClient.eventBlockProfitPerHour;
         }
     }
 
-    private void ensureContext() { //хуярит контекст когда уже можно, проверка можно сказать..
+    private void ensureContext() {
         if(contextBuilder == null && blockProfitPH != null) {
             contextBuilder = new ContextBuilder.Builder()
                     .addTexture(TEXTURE, 0, 0, true, width, height, TEXTURE_SIZE)
@@ -48,7 +50,7 @@ public class WiBlockProfitPH extends WWidget {
         }
     }
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
+    protected void extractWidgetRenderState(@NonNull GuiGraphicsExtractor context, int mouseX, int mouseY, float delta) {
         if(widgetScreen != null || ConfigMining.bphWidgetToggle) {
             hide(false);
         } else {

@@ -15,14 +15,10 @@ public record ChatTab(String name, List<String> startsWithFilters, int color, in
         }
         String content = message.getString();
         for (String filter : startsWithFilters) {
-            if (content != null && content.startsWith(filter)) {
+            if (content.startsWith(filter)) {
                 return true;
             }
         }
         return false;
-    }
-
-    public List<String> getFilter() {
-        return this.startsWithFilters;
     }
 }

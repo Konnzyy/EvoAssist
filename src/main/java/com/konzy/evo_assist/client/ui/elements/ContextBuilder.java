@@ -1,6 +1,6 @@
 package com.konzy.evo_assist.client.ui.elements;
 
-import com.konzy.evo_assist.client.Evo_assistClient;
+import com.konzy.evo_assist.client.EvoAssistClient;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -12,35 +12,30 @@ import net.minecraft.resources.Identifier;
 public class ContextBuilder {
     private final List<WTexture> texturesList;
     private final List<WText> textList;
-    private final List<WProgressBar> barList;
     private final int padding;
     private int x;
     private int y;
-    private int width;
-    private int height;
+    private final int height;
 
     private final String[] cachedLines;
     private final int[] cachedColors;
-    private final Identifier[] cachedIcons;
 
 
     ContextBuilder(Builder builder) {
         this.texturesList = new ArrayList<>(builder.texturesList);
         this.textList = new ArrayList<>(builder.textList);
-        this.barList = new ArrayList<>(builder.barList);
 
         this.padding = builder.padding;
 
         this.x = builder.x;
         this.y = builder.y;
 
-        this.width = builder.width;
         this.height = builder.height;
 
 
         this.cachedLines = new String[textList.size()];
         this.cachedColors = new int[textList.size()];
-        this.cachedIcons = new Identifier[texturesList.size()];
+        Identifier[] cachedIcons = new Identifier[texturesList.size()];
 
 
         for(int i = 0; i < textList.size(); i++) {
@@ -73,49 +68,6 @@ public class ContextBuilder {
         }
     }
 
-    public void updateBar(int index, int value, int min, int max) {
-        barList.get(index).setValue(min, max, value);
-    }
-    public WProgressBar getBar(int index) {
-        return barList.get(index);
-    }
-
-    public void updateColor(int index, int newColor) {
-        if(index >= 0 && index < textList.size()) {
-            if(cachedColors[index] != newColor) {
-                cachedColors[index] = newColor;
-                WText old = textList.get(index);
-
-                textList.set(index, new WText(
-                        Component.literal(cachedLines[index]),
-                        newColor,
-                        old.getX(),
-                        old.getY(),
-                        old.padding()
-                ));
-            }
-        }
-    }
-
-    public void updateIcon(int index, Identifier icon) {
-        if(index >= 0 && index < texturesList.size()) {
-            if(cachedIcons[index] != icon) {
-                cachedIcons[index] = icon;
-                WTexture texture = texturesList.get(index);
-
-                texturesList.set(index, new WTexture(
-                        cachedIcons[index],
-                        texture.getX(),
-                        texture.getY(),
-                        texture.getCentered(),
-                        texture.getWidgetWidth(),
-                        texture.getWidgetHeight(),
-                        texture.getScale()
-                ));
-            }
-        }
-    }
-
     public void setPosition(int x, int y) {
         this.x = x;
         this.y = y;
@@ -133,19 +85,12 @@ public class ContextBuilder {
         for(WText text : textList) {
             int textX = x + text.getX();
             int textY = y + text.getY() + (text.padding() ? currentPadding : 0);
-            context.text(Evo_assistClient.instance.font, Component.literal(cachedLines[textList.indexOf(text)]),
+            context.text(EvoAssistClient.instance.font, Component.literal(cachedLines[textList.indexOf(text)]),
                     textX, textY, cachedColors[textList.indexOf(text)] | 0xFF000000, true);
 
             if(text.padding()) {
                 currentPadding += padding;
             }
-        }
-
-        for(WProgressBar bar : barList) {
-            int bx = bar.getX();
-            int by = bar.getY();
-            context.fill(bx, by, bx+bar.getWidth(), by+bar.getHeight(), bar.getBackColor());
-            context.fill(bx, by, bx+bar.getValue(), by+bar.getHeight(), bar.getFrontColor());
         }
 
     }
@@ -170,15 +115,12 @@ public class ContextBuilder {
 
 
     public static class Builder {
-        private ArrayList<WTexture> texturesList = new ArrayList<>();
-        private ArrayList<WText> textList = new ArrayList<>();
-        private ArrayList<WProgressBar> barList = new ArrayList<>();
+        private final ArrayList<WTexture> texturesList = new ArrayList<>();
+        private final ArrayList<WText> textList = new ArrayList<>();
         private int padding;
         private int x;
         private int y;
-        private int width;
         private int height;
-        private int scale;
 
         public Builder addTexture(Identifier texture, int x, int y, boolean centered, int widgetWidth, int widgetHeight, int scale) {
             this.texturesList.add(new WTexture(texture, x, y, centered, widgetWidth, widgetHeight, scale));
@@ -187,11 +129,6 @@ public class ContextBuilder {
 
         public Builder addLine(Component text, int color, int x, int y, boolean usePadding) {
             this.textList.add(new WText(text, color, x, y, usePadding));
-            return this;
-        }
-
-        public Builder addBar(int x, int y, int width, int height, int backColor, int frontColor) {
-            this.barList.add(new WProgressBar(x, y, width, height, backColor, frontColor));
             return this;
         }
 
@@ -211,7 +148,6 @@ public class ContextBuilder {
         }
 
         public Builder setWidth(int width) {
-            this.width = width;
             return this;
         }
 
@@ -221,7 +157,6 @@ public class ContextBuilder {
         }
 
         public Builder setScale(int scale) {
-            this.scale = scale;
             return this;
         }
 

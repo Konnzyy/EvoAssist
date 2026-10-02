@@ -1,12 +1,12 @@
 package com.konzy.evo_assist.client.config;
 
-import com.konzy.evo_assist.client.Evo_assistClient;
+import com.konzy.evo_assist.client.EvoAssistClient;
 import com.konzy.evo_assist.client.config.Hidden.HudConfig;
-import com.konzy.evo_assist.client.ui.WidgetScreen;
+import com.konzy.evo_assist.client.ui.EvoConfigScreen;
 import com.teamresourceful.resourcefulconfig.api.annotations.*;
 
 @com.teamresourceful.resourcefulconfig.api.annotations.Config(
-        value = Evo_assistClient.MODID,
+        value = EvoAssistClient.MODID,
         categories = {
                 ConfigAutoclicker.class,
                 ConfigMining.class,
@@ -20,24 +20,16 @@ import com.teamresourceful.resourcefulconfig.api.annotations.*;
 )
 @ConfigInfo(
         icon = "fish",
-        title = "§d§lEvoAssist",
-        description = "QoL mod for PrisonEvo mode of Diamond World",
-        descriptionTranslation = "evoassist.config.info",
-        links = {
-            @ConfigInfo.Link(
-                    value = "https://discord.gg/sx4TXM2NX8",
-                    icon = "code-2",
-                    text = "Discord"
-            )
-        }
+        title = "§e§lEvoAssist",
+        description = "Client-side QoL tools for DiamondWorld Prison Evo.",
+        descriptionTranslation = "evoassist.config.info"
 )
 public class Config {
-
-    @Comment(value = "§cДВИГАТЬ ВИДЖЕТЫ ТУТ ----------------------->\n§cДВИГАТЬ ВИДЖЕТЫ ТУТ ----------------------->\n§cДВИГАТЬ ВИДЖЕТЫ ТУТ ----------------------->")
-    @ConfigButton(text = "Открыть", title = "Открыть меню редактирования виджетов")
-    public static final Runnable editWidgetsButton = () -> {
-        Evo_assistClient.instance.gui.setScreen(new WidgetScreen());
-    }; /////////////////////////////////////
+    @ConfigButton(text = "Открыть", title = "Открыть настройки EvoAssist")
+    public static final Runnable openEvoAssistButton = () -> {
+        var client = EvoAssistClient.instance;
+        client.gui.setScreen(new EvoConfigScreen(client.gui.screen()));
+    };
 
 
 }

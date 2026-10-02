@@ -1,7 +1,8 @@
 package com.konzy.evo_assist.client.ui.widgets;
 
 import static com.konzy.evo_assist.client.util.Texts.tr;
-import com.konzy.evo_assist.client.Evo_assistClient;
+
+import com.konzy.evo_assist.client.EvoAssistClient;
 import com.konzy.evo_assist.client.config.Hidden.HudConfig;
 import com.konzy.evo_assist.client.config.ConfigMining;
 import com.konzy.evo_assist.client.features.mine.MiningGoals;
@@ -12,6 +13,7 @@ import com.konzy.evo_assist.client.util.TimeUtils;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import org.jspecify.annotations.NonNull;
 
 
 public final class WiMiningGoal extends WWidget {
@@ -25,7 +27,7 @@ public final class WiMiningGoal extends WWidget {
     }
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    protected void extractWidgetRenderState(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         MiningGoals goals = MiningGoals.getInstance();
         MiningGoals.Goal goal = blockGoal ? goals.blockGoal() : goals.timeGoal();
         boolean widgetEnabled = blockGoal ? ConfigMining.blockGoalWidgetEnabled : ConfigMining.timeGoalWidgetEnabled;
@@ -56,7 +58,7 @@ public final class WiMiningGoal extends WWidget {
             Component timeLine = Component.literal(tr("evoassist.hud.time") + "" + TimeUtils.asTextTime(goal.activeMillis)
                     + " / " + TimeUtils.asTextTime(targetMillis) + (goal.complete ? " §a✓" : ""));
             updateLine(0, timeLine);
-            setBaseWidth(Math.max(230, 24 + Evo_assistClient.instance.font.width(timeLine)));
+            setBaseWidth(Math.max(230, 24 + EvoAssistClient.instance.font.width(timeLine)));
             updateLine(1, Component.literal(tr("evoassist.hud.mined") + "§b" + MoneyUtils.convertTo(goal.blocks)
                     + "§f\uE127 / §a" + MoneyUtils.convertTo(goal.money)
                     + "§f\uE135 / §d" + MoneyUtils.convertTo(goal.shards) + "§f\uE365"));

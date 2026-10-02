@@ -11,8 +11,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Hud.class)
 public class ActionBarMixin {
     @Inject(at = @At("HEAD"), method = "setOverlayMessage(Lnet/minecraft/network/chat/Component;Z)V")
-    private void actionBar(Component message, boolean tinted, CallbackInfo info) {
-        //Evo_extrasClient.logger.info("||||||||||||    " + message.toString());
-        BlockProfitPerHour.getInstance().updateActionBar(message);
+    private void actionBar(Component string, boolean animate, CallbackInfo info) {
+        BlockProfitPerHour.getInstance().updateActionBar(string);
     }
 }
