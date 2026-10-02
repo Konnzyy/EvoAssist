@@ -20,7 +20,7 @@ public class ConfigVisual {
     public static int goalNoticeDurationSeconds = 5;
 
     public static long goalNoticeDurationMillis() {
-        return Math.max(1, Math.min(60, goalNoticeDurationSeconds)) * 1_000L;
+        return Math.clamp(goalNoticeDurationSeconds, 1, 60) * 1_000L;
     }
 
 }

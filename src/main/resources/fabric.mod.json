@@ -14,13 +14,13 @@
       "com.konzy.evo_assist.client.compat.EvoModMenu"
     ],
     "fabric-datagen": [
-      "com.konzy.evo_assist.client.Evo_assistDataGenerator"
+      "com.konzy.evo_assist.client.EvoAssistDataGenerator"
     ],
     "client": [
-      "com.konzy.evo_assist.client.Evo_assistClient"
+      "com.konzy.evo_assist.client.EvoAssistClient"
     ],
     "main": [
-      "com.konzy.evo_assist.Evo_assist"
+      "com.konzy.evo_assist.EvoAssist"
     ]
   },
   "mixins": [

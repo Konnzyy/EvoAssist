@@ -18,7 +18,7 @@ public enum ChatPrefix {
         this.text = text;
     }
 
-    public String get() { return prefix; }
+    public String getPrefix() { return prefix; }
     public String getText() { return text; }
 
     public static List<ChatPrefix> getAll() {

@@ -1,7 +1,8 @@
 package com.konzy.evo_assist.client.ui.widgets;
 
 import static com.konzy.evo_assist.client.util.Texts.tr;
-import com.konzy.evo_assist.client.Evo_assistClient;
+
+import com.konzy.evo_assist.client.EvoAssistClient;
 import com.konzy.evo_assist.client.config.ConfigClan;
 import com.konzy.evo_assist.client.config.ConfigMining;
 import com.konzy.evo_assist.client.config.Hidden.HudConfig;
@@ -15,6 +16,7 @@ import java.math.BigDecimal;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import org.jspecify.annotations.NonNull;
 
 public final class WiAdditionalGoal extends WWidget {
     private final Type type;
@@ -34,7 +36,7 @@ public final class WiAdditionalGoal extends WWidget {
     }
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    protected void extractWidgetRenderState(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         var goals = AdditionalGoals.getInstance();
         var goal = goals.goal(type);
         if (widgetScreen == null && (!goal.active() || !enabled() || type.clan && !goals.connected())) {
@@ -76,7 +78,7 @@ public final class WiAdditionalGoal extends WWidget {
         Component progressLine = Component.literal((type.clan ? tr(type.title) : tr("evoassist.hud.received")) + ": " + color + value
                 + "§f" + icon + " / " + color + target + "§f" + icon + (goal.complete ? " §a✓" : ""));
         updateLine(0, progressLine);
-        setBaseWidth(Math.max(230, (type.clan ? 20 : 26) + Evo_assistClient.instance.font.width(progressLine)));
+        setBaseWidth(Math.max(230, (type.clan ? 20 : 26) + EvoAssistClient.instance.font.width(progressLine)));
         if (!type.clan) {
             updateLine(1, Component.literal(tr("evoassist.hud.time") + "" + TimeUtils.asTextTime(goal.activeMillis)));
             String secondary = type == Type.MONEY

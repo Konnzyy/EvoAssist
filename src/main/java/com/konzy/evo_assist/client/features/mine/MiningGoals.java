@@ -1,7 +1,7 @@
 package com.konzy.evo_assist.client.features.mine;
 
 import static com.konzy.evo_assist.client.util.Texts.tr;
-import com.konzy.evo_assist.client.Evo_assistClient;
+import com.konzy.evo_assist.client.EvoAssistClient;
 import com.konzy.evo_assist.client.config.ConfigMining;
 import com.konzy.evo_assist.client.config.ConfigClan;
 import com.konzy.evo_assist.client.config.ConfigVisual;
@@ -230,7 +230,7 @@ public final class MiningGoals {
             Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
             lastSave = System.currentTimeMillis();
         } catch (IOException error) {
-            Evo_assistClient.logger.warn("Could not save mining goals", error);
+            EvoAssistClient.logger.warn("Could not save mining goals", error);
         }
     }
 
@@ -242,7 +242,7 @@ public final class MiningGoals {
             loadGoal(values, "blocks", blocks);
             loadGoal(values, "time", time);
         } catch (IOException | NumberFormatException error) {
-            Evo_assistClient.logger.warn("Could not load mining goals", error);
+            EvoAssistClient.logger.warn("Could not load mining goals", error);
             blocks.reset(0);
             time.reset(0);
         }

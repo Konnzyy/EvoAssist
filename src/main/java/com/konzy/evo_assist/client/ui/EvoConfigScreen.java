@@ -1,7 +1,8 @@
 package com.konzy.evo_assist.client.ui;
 
 import static com.konzy.evo_assist.client.util.Texts.tr;
-import com.konzy.evo_assist.client.Evo_assistClient;
+
+import com.konzy.evo_assist.client.EvoAssistClient;
 import com.konzy.evo_assist.client.config.Config;
 import com.konzy.evo_assist.client.features.goals.AdditionalGoals;
 import com.konzy.evo_assist.client.util.GoalAmount;
@@ -23,6 +24,7 @@ import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
+import org.jspecify.annotations.NonNull;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
@@ -115,11 +117,11 @@ public class EvoConfigScreen extends Screen {
     public EvoConfigScreen(Screen parent) {
         super(Component.literal("EvoAssist"));
         this.parent = parent;
-        String fullVersion = FabricLoader.getInstance().getModContainer(Evo_assistClient.MODID)
+        String fullVersion = FabricLoader.getInstance().getModContainer(EvoAssistClient.MODID)
                 .map(mod -> mod.getMetadata().getVersion().getFriendlyString()).orElse("dev");
         this.modVersion = fullVersion.split("\\+")[0];
-        ConfigVisual.menuOpacity = Math.max(10, Math.min(100, ConfigVisual.menuOpacity));
-        ConfigVisual.goalNoticeDurationSeconds = Math.max(1, Math.min(60, ConfigVisual.goalNoticeDurationSeconds));
+        ConfigVisual.menuOpacity = Math.clamp(ConfigVisual.menuOpacity, 10, 100);
+        ConfigVisual.goalNoticeDurationSeconds = Math.clamp(ConfigVisual.goalNoticeDurationSeconds, 1, 60);
     }
 
     private List<Row> rows() {
@@ -210,12 +212,12 @@ public class EvoConfigScreen extends Screen {
     private int top() { return (height - panelHeight()) / 2; }
     private int right() { return left() + panelWidth(); }
     private int bottom() { return top() + panelHeight(); }
-    private int sidebarWidth() { return Math.min(148, Math.max(94, panelWidth() / 4)); }
+    private int sidebarWidth() { return Math.clamp(panelWidth() / 4, 94, 148); }
     private int contentX() { return left() + sidebarWidth() + 8; }
     private int contentWidth() { return right() - contentX(); }
     private int contentTop() { return top() + 48; }
     private int contentBottom() { return bottom() - 38; }
-    private int navStep() { return Math.min(29, Math.max(12, (panelHeight() - 56) / Page.values().length)); }
+    private int navStep() { return Math.clamp((panelHeight() - 56) / Page.values().length, 12, 29); }
     private int navHeight() { return Math.min(24, navStep() - 2); }
     private int rowHeight(Row row) {
         if (row.kind == Kind.SECTION) return 24;
@@ -230,7 +232,7 @@ public class EvoConfigScreen extends Screen {
     }
 
     private int menuColor(int color) {
-        int opacity = Math.max(10, Math.min(100, ConfigVisual.menuOpacity));
+        int opacity = Math.clamp(ConfigVisual.menuOpacity, 10, 100);
         int alpha = (color >>> 24) * opacity / 100;
         return (color & 0x00FFFFFF) | (alpha << 24);
     }
@@ -280,7 +282,7 @@ public class EvoConfigScreen extends Screen {
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    public void extractBackground(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         // This screen draws its own adjustable translucent backdrop.
     }
 
@@ -288,7 +290,7 @@ public class EvoConfigScreen extends Screen {
     public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float delta) {
         long now = System.nanoTime();
         if (lastHoverFrameNanos != 0) {
-            hoverStep = Math.min(1.0f, Math.max(0.0f, (now - lastHoverFrameNanos) / 100_000_000.0f));
+            hoverStep = Math.clamp((now - lastHoverFrameNanos) / 100_000_000.0f, 0.0f, 1.0f);
         }
         lastHoverFrameNanos = now;
         scroll = Math.min(scroll, maxScroll());
@@ -357,7 +359,7 @@ public class EvoConfigScreen extends Screen {
     private int cardX() { return contentX() + 8; }
     private int cardWidth() { return contentWidth() - 16; }
     private boolean narrow() { return contentWidth() < 340; }
-    private int controlWidth() { return narrow() ? cardWidth() - 24 : Math.min(192, Math.max(155, cardWidth() / 3)); }
+    private int controlWidth() { return narrow() ? cardWidth() - 24 : Math.clamp(cardWidth() / 3, 155, 192); }
     private int controlX() { return narrow() ? cardX() + 12 : cardX() + cardWidth() - controlWidth() - 12; }
     private int controlY(int rowY) { return narrow() ? rowY + 37 : rowY + 16; }
     private int resetX() { return controlX() + controlWidth() - 39; }
@@ -473,8 +475,7 @@ public class EvoConfigScreen extends Screen {
             int current = value(row.id);
             int trackX = sliderStart(row);
             int trackWidth = sliderWidth(row);
-            int filled = Math.round(trackWidth * Math.max(0, Math.min(1,
-                    (current - row.min) / (float) (row.max - row.min))));
+            int filled = Math.round(trackWidth * Math.clamp((current - row.min) / (float) (row.max - row.min), 0, 1));
             renderControl(g, "track:" + row.id, trackX - 4, cy + 2, trackWidth + 8, 16, mouseX, mouseY);
             surface(g, trackX, cy + 8, trackX + trackWidth, cy + 12, TRACK);
             surface(g, trackX, cy + 8, trackX + filled, cy + 12, ACCENT);
@@ -611,17 +612,19 @@ public class EvoConfigScreen extends Screen {
         String id = pendingResetId;
         pendingResetId = null;
         if (id == null) return;
-        if (id.equals("resetMining")) resetMining();
-        else if (id.equals("resetGoals")) resetGoals();
-        else if (id.equals("resetClanGoals")) {
-            AdditionalGoals.getInstance().reset(true);
-            MiningGoals.getInstance().clearNotices(true);
-            feedback = tr("evoassist.ui.clanGoalsReset");
-            feedbackUntil = System.currentTimeMillis() + 2500;
-            startResetFlash(id);
+        switch (id) {
+            case "resetMining" -> resetMining();
+            case "resetGoals" -> resetGoals();
+            case "resetClanGoals" -> {
+                AdditionalGoals.getInstance().reset(true);
+                MiningGoals.getInstance().clearNotices(true);
+                feedback = tr("evoassist.ui.clanGoalsReset");
+                feedbackUntil = System.currentTimeMillis() + 2500;
+                startResetFlash(id);
+            }
+            case "resetBosses", "resetClan" -> resetRewards(id);
+            default -> resetValue(id);
         }
-        else if (id.equals("resetBosses") || id.equals("resetClan")) resetRewards(id);
-        else resetValue(id);
     }
 
     private void startResetFlash(String id) {
@@ -678,9 +681,9 @@ public class EvoConfigScreen extends Screen {
 
     private static KeyMapping bindingFor(String id) {
         return switch (id) {
-            case "menuKey" -> Evo_assistClient.menuKey();
-            case "clickerModeKey" -> Evo_assistClient.clickerModeKey();
-            default -> Evo_assistClient.clickerKey();
+            case "menuKey" -> EvoAssistClient.menuKey();
+            case "clickerModeKey" -> EvoAssistClient.clickerModeKey();
+            default -> EvoAssistClient.clickerKey();
         };
     }
 
@@ -698,14 +701,14 @@ public class EvoConfigScreen extends Screen {
     private static void setValue(String id, int newValue) {
         switch (id) {
             case "cps" -> ConfigAutoclicker.autoclickerCps = newValue;
-            case "menuOpacity" -> ConfigVisual.menuOpacity = Math.max(10, Math.min(100, newValue));
-            case "goalNoticeDuration" -> ConfigVisual.goalNoticeDurationSeconds = Math.max(1, Math.min(60, newValue));
+            case "menuOpacity" -> ConfigVisual.menuOpacity = Math.clamp(newValue, 10, 100);
+            case "goalNoticeDuration" -> ConfigVisual.goalNoticeDurationSeconds = Math.clamp(newValue, 1, 60);
             case "blockGoal" -> {
                 ConfigMining.blockGoalTarget = newValue;
                 MiningGoals.getInstance().syncTargets();
             }
             case "timeGoal" -> {
-                ConfigMining.timeGoalMinutes = Math.max(0, Math.min(9_999, newValue));
+                ConfigMining.timeGoalMinutes = Math.clamp(newValue, 0, 9_999);
                 MiningGoals.getInstance().syncTargets();
             }
         }
@@ -756,15 +759,15 @@ public class EvoConfigScreen extends Screen {
         switch (id) {
             case "chatHorizontal" -> ConfigChat.chatTabsOrientation = ConfigChat.Orientation.HORIZONTAL;
             case "chatVertical" -> ConfigChat.chatTabsOrientation = ConfigChat.Orientation.VERTICAL;
-            case "buttonLeft" -> ConfigAutoclicker.autoclickerButton = ConfigAutoclicker.ENUMautoclickerButton.LMB;
-            case "buttonRight" -> ConfigAutoclicker.autoclickerButton = ConfigAutoclicker.ENUMautoclickerButton.RMB;
+            case "buttonLeft" -> ConfigAutoclicker.autoclickerButton = ConfigAutoclicker.ENUMAutoClickerButton.LMB;
+            case "buttonRight" -> ConfigAutoclicker.autoclickerButton = ConfigAutoclicker.ENUMAutoClickerButton.RMB;
             case "modeClick" -> {
                 Clicker.stop();
-                ConfigAutoclicker.autoclickerActivation = ConfigAutoclicker.ENUMautoclickerActivation.SWITCH;
+                ConfigAutoclicker.autoclickerActivation = ConfigAutoclicker.ENUMAutoClickerActivation.SWITCH;
             }
             case "modeHold" -> {
                 Clicker.stop();
-                ConfigAutoclicker.autoclickerActivation = ConfigAutoclicker.ENUMautoclickerActivation.HOLD;
+                ConfigAutoclicker.autoclickerActivation = ConfigAutoclicker.ENUMAutoClickerActivation.HOLD;
             }
             default -> {
                 ConfigMining.bphAllowEnum type = allowedType(id);
@@ -800,11 +803,11 @@ public class EvoConfigScreen extends Screen {
     }
 
     private void resetRewards(String id) {
-        if (!Evo_assistClient.rewardStatistics.hasServer()) {
+        if (!EvoAssistClient.rewardStatistics.hasServer()) {
             feedback = tr("evoassist.ui.connectFirst");
         } else {
-            if (id.equals("resetBosses")) Evo_assistClient.rewardStatistics.resetBosses();
-            else Evo_assistClient.rewardStatistics.resetClan();
+            if (id.equals("resetBosses")) EvoAssistClient.rewardStatistics.resetBosses();
+            else EvoAssistClient.rewardStatistics.resetClan();
             feedback = tr("evoassist.ui.statisticsReset");
             startResetFlash(id);
         }
@@ -812,7 +815,7 @@ public class EvoConfigScreen extends Screen {
     }
 
     private void updateSlider(Row row, double mouseX) {
-        double fraction = Math.max(0, Math.min(1, (mouseX - sliderStart(row)) / sliderWidth(row)));
+        double fraction = Math.clamp((mouseX - sliderStart(row)) / sliderWidth(row), 0, 1);
         setValue(row.id, row.min + (int) Math.round(fraction * (row.max - row.min)));
         editingId = null;
     }
@@ -836,6 +839,7 @@ public class EvoConfigScreen extends Screen {
     private static String amountLabel(String id) {
         var type = amountType(id);
         try {
+            assert type != null;
             return AdditionalGoals.format(type, GoalAmount.parse(
                     AdditionalGoals.configuredTarget(type), type.whole()).min(type.maximum()));
         } catch (IllegalArgumentException error) { return "0"; }
@@ -843,6 +847,7 @@ public class EvoConfigScreen extends Screen {
 
     private static void setAmount(String id, String input) {
         var type = amountType(id);
+        assert type != null;
         String value = AdditionalGoals.parseTarget(type, input).toPlainString();
         AdditionalGoals.setConfiguredTarget(type, value);
         AdditionalGoals.getInstance().syncTargets();
@@ -856,8 +861,8 @@ public class EvoConfigScreen extends Screen {
                 if (amountType(id) != null) setAmount(id, editingText);
                 else {
                     int typed = Integer.parseInt(editingText);
-                    Row row = rows().stream().filter(item -> item.id.equals(id)).findFirst().orElse(null);
-                    if (row != null) setValue(id, Math.max(row.min, Math.min(row.max, typed)));
+                    rows().stream().filter(item -> item.id.equals(id)).findFirst().ifPresent(row ->
+                            setValue(id, Math.max(row.min, Math.min(row.max, typed))));
                 }
             }
         } catch (IllegalArgumentException error) {
@@ -869,7 +874,7 @@ public class EvoConfigScreen extends Screen {
     }
 
     private void save() {
-        Evo_assistClient.configurator.saveConfig(Config.class);
+        EvoAssistClient.configurator.saveConfig(Config.class);
     }
 
     private void prepareControlClick() {
@@ -883,7 +888,7 @@ public class EvoConfigScreen extends Screen {
     }
 
     @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+    public boolean mouseClicked(@NonNull MouseButtonEvent event, boolean doubleClick) {
         if (pendingResetId != null) {
             if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
                 int x = resetDialogX();
@@ -1012,7 +1017,7 @@ public class EvoConfigScreen extends Screen {
     }
 
     @Override
-    public boolean mouseDragged(MouseButtonEvent event, double dx, double dy) {
+    public boolean mouseDragged(@NonNull MouseButtonEvent event, double dx, double dy) {
         if (pendingResetId != null) return true;
         if (draggingSlider != null) {
             updateSlider(draggingSlider, event.x());
@@ -1022,7 +1027,7 @@ public class EvoConfigScreen extends Screen {
     }
 
     @Override
-    public boolean mouseReleased(MouseButtonEvent event) {
+    public boolean mouseReleased(@NonNull MouseButtonEvent event) {
         if (draggingSlider != null) {
             draggingSlider = null;
             save();
@@ -1044,7 +1049,7 @@ public class EvoConfigScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(KeyEvent event) {
+    public boolean keyPressed(@NonNull KeyEvent event) {
         if (pendingResetId != null) {
             if (event.key() == GLFW.GLFW_KEY_ESCAPE) pendingResetId = null;
             else if (event.key() == GLFW.GLFW_KEY_ENTER || event.key() == GLFW.GLFW_KEY_KP_ENTER) confirmReset();
@@ -1092,7 +1097,7 @@ public class EvoConfigScreen extends Screen {
     }
 
     @Override
-    public boolean charTyped(CharacterEvent event) {
+    public boolean charTyped(@NonNull CharacterEvent event) {
         if (pendingResetId != null) return true;
         if (editingId != null) {
             int cp = event.codepoint();

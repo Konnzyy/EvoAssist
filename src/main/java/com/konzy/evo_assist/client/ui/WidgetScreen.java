@@ -1,7 +1,8 @@
 package com.konzy.evo_assist.client.ui;
 
 import static com.konzy.evo_assist.client.util.Texts.tr;
-import com.konzy.evo_assist.client.Evo_assistClient;
+
+import com.konzy.evo_assist.client.EvoAssistClient;
 import com.konzy.evo_assist.client.config.Config;
 import com.konzy.evo_assist.client.config.Hidden.HudConfig;
 import com.konzy.evo_assist.client.ui.widgets.WWidget;
@@ -19,6 +20,7 @@ import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import org.jspecify.annotations.NonNull;
 
 
 public class WidgetScreen extends Screen {
@@ -102,7 +104,7 @@ public class WidgetScreen extends Screen {
     }
 
     @Override
-    public void extractBackground(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    public void extractBackground(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         // Keep the world and other mods' HUD visible while arranging our widgets.
         if (minecraft.level == null) super.extractBackground(graphics, mouseX, mouseY, delta);
         else minecraft.gui.hud.extractDeferredSubtitles();
@@ -112,7 +114,7 @@ public class WidgetScreen extends Screen {
     public boolean isPauseScreen() { return false; }
 
     @Override
-    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    public void extractRenderState(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         super.extractRenderState(graphics, mouseX, mouseY, delta);
         graphics.centeredText(minecraft.font, tr("evoassist.editor.help"),
                 width / 2, height - 14, 0xFFFFFFFF);
@@ -139,9 +141,9 @@ public class WidgetScreen extends Screen {
         if (wiChatTabs != null) wiChatTabs.savePosition();
         additionalGoals.forEach(WiAdditionalGoal::savePosition);
 
-        boolean configurator = Evo_assistClient.configurator.saveConfig(Config.class);
+        boolean configurator = EvoAssistClient.configurator.saveConfig(Config.class);
 
-        Evo_assistClient.evoClient.initHudWidgets();
+        EvoAssistClient.evoClient.initHudWidgets();
 
         if (parent != null) {
             minecraft.gui.setScreen(parent);

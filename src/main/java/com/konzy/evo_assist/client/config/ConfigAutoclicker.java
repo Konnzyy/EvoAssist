@@ -19,7 +19,7 @@ public class ConfigAutoclicker {
     @Comment(
             value = "Не рекомендуется включать, заставляет автокликер работать без вашего участия"
     )
-    public static boolean autoclickerToggle = false; /////////////////////////////////////
+    public static boolean autoclickerToggle = false;
 
 
     @ConfigEntry(
@@ -27,8 +27,8 @@ public class ConfigAutoclicker {
             translation = "evoassist.config.autoclicker.button"
     )
     @ConfigOption.Select
-    public static ENUMautoclickerButton autoclickerButton = ENUMautoclickerButton.LMB; //////////////////////////////////////
-    public enum ENUMautoclickerButton {
+    public static ENUMAutoClickerButton autoclickerButton = ENUMAutoClickerButton.LMB;
+    public enum ENUMAutoClickerButton {
         LMB, RMB;
         @Override
         public String toString() {
@@ -44,8 +44,8 @@ public class ConfigAutoclicker {
             translation = "evoassist.config.autoclicker.activation"
     )
     @ConfigOption.Select
-    public static ENUMautoclickerActivation autoclickerActivation = ENUMautoclickerActivation.SWITCH; /////////////////////////////
-    public enum ENUMautoclickerActivation {
+    public static ENUMAutoClickerActivation autoclickerActivation = ENUMAutoClickerActivation.SWITCH;
+    public enum ENUMAutoClickerActivation {
         HOLD, SWITCH;
         @Override
         public String toString() {
@@ -63,5 +63,5 @@ public class ConfigAutoclicker {
     )
     @ConfigOption.Range(min = 1, max = 20)
     @ConfigOption.Slider
-    public static int autoclickerCps = 10; ///////////////////////////////////
+    public static int autoclickerCps = 10;
 }

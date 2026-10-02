@@ -1,7 +1,7 @@
 package com.konzy.evo_assist.client.features.mine.blockPH;
 
 
-import com.konzy.evo_assist.client.Evo_assistClient;
+import com.konzy.evo_assist.client.EvoAssistClient;
 import com.konzy.evo_assist.client.config.ConfigMining;
 import com.konzy.evo_assist.client.features.mine.MiningGoals;
 import com.konzy.evo_assist.client.features.goals.AdditionalGoals;
@@ -12,18 +12,17 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.level.block.state.BlockState;
+import org.jspecify.annotations.NonNull;
+
 import java.util.Arrays;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
 
-    /*
-     *  КОНФИГУРАЦИЯ
-     */
+    // Config
     private static final long MAX_LATEST_ACTION_BAR_MS = 10_000;
     private static final long AUTO_PAUSE_AFTER_MS = 5_000;
-
     
     public long totalBrokenBlocks = 0;
     public long uptime = 0;
@@ -32,8 +31,8 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
     private long lastBlockBreakAt = -1;
     private long lastActionBarAt = -1;
     private int blocksAwaitingPrice = 0;
-    private long latestActionBar = 0; // последняя цена из акшнбара
-    private long latestActionBarTimeout = 100; // за каждый полученный акшнбар больше в 10 раз обычного сюда добавляется 1, анти-абуз бомбочек и прочего
+    private long latestActionBar = 0;
+    private long latestActionBarTimeout = 100;
     public boolean paused = true;
 
     public long BlocksPerHour = 0;
@@ -45,7 +44,7 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
     static Pattern actionBarPattern = Pattern.compile("\\+(\\d+(?:\\.\\d+)?[KMBTQ]?)", Pattern.CASE_INSENSITIVE);
     static Pattern shardMultiplierPattern = Pattern.compile("(\\d+)");
     @Override
-    public void afterBlockBreak(ClientLevel world, LocalPlayer playerEntity, BlockPos blockPos, BlockState blockState) {
+    public void afterBlockBreak(@NonNull ClientLevel world, @NonNull LocalPlayer playerEntity, @NonNull BlockPos blockPos, @NonNull BlockState blockState) {
         long now = System.currentTimeMillis();
         if(lastBlockBreakAt < 0 || now - lastBlockBreakAt > 2_000) {
             blocksAwaitingPrice = 0;
@@ -78,10 +77,10 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
         if(matchingText.find()) {
 
             long price = MoneyUtils.convertFrom(matchingText.group(1));
-            if(price / 10 > latestActionBar && latestActionBarTimeout < 10) { // если цена с акшнбара сказочно высокая
-                latestActionBarTimeout++; // забить хуй
+            if(price / 10 > latestActionBar && latestActionBarTimeout < 10) {
+                latestActionBarTimeout++;
             } else {
-                latestActionBar = price; // если норм то пушить
+                latestActionBar = price;
                 latestActionBarTimeout = 0;
                 long now = System.currentTimeMillis();
                 lastActionBarAt = now;
@@ -104,7 +103,7 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
         if(msg.startsWith("Вы нашли шард!")) {
 
             latestActionBarTimeout = 0;
-            if (msg.length() > 14) { // если Вы нашли шард! x5; если умножается короче
+            if (msg.length() > 14) {
                 Matcher matcher = shardMultiplierPattern.matcher(msg);
                 if (matcher.find(1)) {
                     int earned = Integer.parseInt(matcher.group(1));
@@ -180,10 +179,10 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
     }
 
     public static BlockProfitPerHour getInstance() {
-        return Evo_assistClient.eventBlockProfitPerHour;
+        return EvoAssistClient.eventBlockProfitPerHour;
     }
 
-    public void second() { //добавляет секунду сюда
+    public void second() {
         if(paused) return;
 
         if(lastBlockBreakAt < 0 || System.currentTimeMillis() - lastBlockBreakAt >= AUTO_PAUSE_AFTER_MS) {

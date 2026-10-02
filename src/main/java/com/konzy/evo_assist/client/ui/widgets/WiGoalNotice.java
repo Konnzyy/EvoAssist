@@ -1,12 +1,13 @@
 package com.konzy.evo_assist.client.ui.widgets;
 
+import com.konzy.evo_assist.client.EvoAssistClient;
 import com.konzy.evo_assist.client.config.Hidden.HudConfig;
-import com.konzy.evo_assist.client.Evo_assistClient;
 import com.konzy.evo_assist.client.features.mine.MiningGoals;
 import com.konzy.evo_assist.client.ui.WidgetScreen;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
+import org.jspecify.annotations.NonNull;
 
 public final class WiGoalNotice extends WWidget {
     private static final int DEFAULT_WIDTH = 260;
@@ -26,16 +27,16 @@ public final class WiGoalNotice extends WWidget {
                 ? HudConfig.GoalNoticeX < 0 && HudConfig.GoalNoticeY < 0 : centered;
         if (!autoCenter) return;
         int screenWidth = widgetScreen == null
-                ? Evo_assistClient.instance.getWindow().getGuiScaledWidth() : widgetScreen.width;
+                ? EvoAssistClient.instance.getWindow().getGuiScaledWidth() : widgetScreen.width;
         int screenHeight = widgetScreen == null
-                ? Evo_assistClient.instance.getWindow().getGuiScaledHeight() : widgetScreen.height;
+                ? EvoAssistClient.instance.getWindow().getGuiScaledHeight() : widgetScreen.height;
         setX(Math.max(0, (int) Math.round((screenWidth - noticeWidth * scale) / 2)));
         setY(Math.max(0, (int) Math.round((screenHeight - NOTICE_HEIGHT * scale) / 2)));
         applyPos();
     }
 
     @Override
-    protected void extractWidgetRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
+    protected void extractWidgetRenderState(@NonNull GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         String notice = MiningGoals.getInstance().currentNotice();
         if (notice == null && widgetScreen == null) {
             hide(true);
@@ -43,7 +44,7 @@ public final class WiGoalNotice extends WWidget {
         }
         hide(false);
         message = Component.literal(notice == null ? MiningGoals.getInstance().previewNotice() : notice);
-        noticeWidth = Math.max(DEFAULT_WIDTH, Evo_assistClient.instance.font.width(message) + 16);
+        noticeWidth = Math.max(DEFAULT_WIDTH, EvoAssistClient.instance.font.width(message) + 16);
         setBaseWidth(noticeWidth);
         centerIfNeeded();
         super.extractWidgetRenderState(graphics, mouseX, mouseY, delta);
@@ -52,12 +53,12 @@ public final class WiGoalNotice extends WWidget {
     @Override
     protected void renderBg(GuiGraphicsExtractor graphics) {
         super.renderBg(graphics);
-        graphics.centeredText(Evo_assistClient.instance.font, message,
+        graphics.centeredText(EvoAssistClient.instance.font, message,
                 getX() + noticeWidth / 2, getY() + 5, 0xFF9DF2B1);
     }
 
     @Override
-    protected void onDrag(MouseButtonEvent event, double deltaX, double deltaY) {
+    protected void onDrag(@NonNull MouseButtonEvent event, double deltaX, double deltaY) {
         if (deltaX != 0 || deltaY != 0) centered = false;
         super.onDrag(event, deltaX, deltaY);
     }

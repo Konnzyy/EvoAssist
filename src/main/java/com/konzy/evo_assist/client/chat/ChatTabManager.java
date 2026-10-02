@@ -1,7 +1,6 @@
 package com.konzy.evo_assist.client.chat;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import net.minecraft.client.Minecraft;
@@ -29,18 +28,18 @@ public class ChatTabManager {
         tabs.add(new ChatTab("evoassist.chat.all", Collections.emptyList(),
                 0xFFFFFF, 0xFFFF55, 0xAAAAAA, 0xFF5555));
 
-        tabs.add(new ChatTab("evoassist.chat.clan", Arrays.asList("[Клан]"),
+        tabs.add(new ChatTab("evoassist.chat.clan", List.of("[Клан]"),
                 0xFFFFFF, 0xFFFF55, 0xAAAAAA, 0xFF5555));
 
-        tabs.add(new ChatTab("evoassist.chat.private",  Arrays.asList("ЛС | "),
+        tabs.add(new ChatTab("evoassist.chat.private", List.of("ЛС | "),
                 0xFFFFFF, 0xFFFF55, 0xAAAAAA, 0xFF5555));
 
-        tabs.add(new ChatTab("L",  Arrays.asList("Ⓛ "),
+        tabs.add(new ChatTab("L", List.of("Ⓛ "),
                 0xFFFFFF, 0xFFFF55, 0xAAAAAA, 0xFF5555));
-        tabs.add(new ChatTab("G", Arrays.asList("Ⓖ "),
+        tabs.add(new ChatTab("G", List.of("Ⓖ "),
                 0xFFFFFF, 0xFFFF55, 0xAAAAAA, 0xFF5555));
 
-        tabs.add(new ChatTab("M", Arrays.asList("Ⓜ "),
+        tabs.add(new ChatTab("M", List.of("Ⓜ "),
                 0xFFFFFF, 0xFFFF55, 0xAAAAAA, 0xFF5555));
     }
 
@@ -75,7 +74,6 @@ public class ChatTabManager {
             Minecraft.getInstance().gui.hud.getChat().rescaleChat();
         }
     }
-    public int getBannedSize() { return this.bannedTabs.size(); }
     public List<ChatTab> getTabs() { return this.tabs; }
 
     public ChatPrefix getCurrentPrefix() { return this.currentPrefix; }

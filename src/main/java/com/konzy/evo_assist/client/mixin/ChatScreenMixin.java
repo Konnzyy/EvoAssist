@@ -27,22 +27,22 @@ public abstract class ChatScreenMixin extends Screen {
     private void onInit(CallbackInfo ci) {
         if(!ConfigChat.chatTabsToggle) return;
         ChatTabManager manager = ChatTabManager.getInstance();
-        addRenderableWidget(new WiChatTabs(null, prefix -> input.setValue(prefix.get())));
+        addRenderableWidget(new WiChatTabs(null, prefix -> input.setValue(prefix.getPrefix())));
         ChatPrefix prefix = manager.getCurrentPrefix();
 
         if (input.getValue().isEmpty() && prefix != ChatPrefix.NONE) {
-            input.setValue(prefix.get());
+            input.setValue(prefix.getPrefix());
         }
     }
 
     @Inject(method = "handleChatInput", at = @At("HEAD"), cancellable = true)
-    private void onSendMessage(String chatText, boolean addToHistory, CallbackInfo ci) {
+    private void onSendMessage(String msg, boolean addToRecent, CallbackInfo ci) {
         if(!ConfigChat.chatTabsToggle) return;
         ChatPrefix prefix = ChatTabManager.getInstance().getCurrentPrefix();
         if (prefix != ChatPrefix.NONE) {
-            String prefixStr = prefix.get();
-            if (chatText.equals(prefixStr)) {
-                ci.cancel(); // ниче не отправлять если чел ничего не ввел после префикса
+            String prefixStr = prefix.getPrefix();
+            if (msg.equals(prefixStr)) {
+                ci.cancel();
             }
         }
     }
