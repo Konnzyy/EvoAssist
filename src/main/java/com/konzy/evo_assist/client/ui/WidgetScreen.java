@@ -4,6 +4,10 @@ import static com.konzy.evo_assist.client.util.Texts.tr;
 
 import com.konzy.evo_assist.client.EvoAssistClient;
 import com.konzy.evo_assist.client.config.Config;
+import com.konzy.evo_assist.client.config.ConfigBosses;
+import com.konzy.evo_assist.client.config.ConfigChat;
+import com.konzy.evo_assist.client.config.ConfigClan;
+import com.konzy.evo_assist.client.config.ConfigMining;
 import com.konzy.evo_assist.client.config.Hidden.HudConfig;
 import com.konzy.evo_assist.client.ui.widgets.WWidget;
 import com.konzy.evo_assist.client.ui.widgets.WiBlockProfitPH;
@@ -70,34 +74,49 @@ public class WidgetScreen extends Screen {
     }
 
     private void initScreenWidgets() {
+        wiBlockProfitPH = null;
+        wiBlockGoal = null;
+        wiTimeGoal = null;
+        wiGoalNotice = null;
+        wiBosses = null;
+        wiClan = null;
+        wiChatTabs = null;
         additionalGoals.clear();
         if (focus == Focus.ALL) {
-        wiBlockProfitPH = new WiBlockProfitPH(
-                HudConfig.WidgetBphX,
-                HudConfig.WidgetBphY,
-                230, 31, this
-        );
-
-        this.addRenderableWidget(wiBlockProfitPH);
-        wiBlockGoal = new WiMiningGoal(true, HudConfig.BlockGoalX, HudConfig.BlockGoalY, this);
-        wiTimeGoal = new WiMiningGoal(false, HudConfig.TimeGoalX, HudConfig.TimeGoalY, this);
-        wiGoalNotice = new WiGoalNotice(HudConfig.GoalNoticeX, HudConfig.GoalNoticeY, this);
-        this.addRenderableWidget(wiBlockGoal);
-        this.addRenderableWidget(wiTimeGoal);
-        this.addRenderableWidget(wiGoalNotice);
-        wiChatTabs = new WiChatTabs(this, null);
-        this.addRenderableWidget(wiChatTabs);
-        for (AdditionalGoals.Type type : AdditionalGoals.Type.values()) {
-            WiAdditionalGoal widget = new WiAdditionalGoal(type, this);
-            additionalGoals.add(widget);
-            this.addRenderableWidget(widget);
+            if (ConfigMining.bphWidgetToggle) {
+                wiBlockProfitPH = new WiBlockProfitPH(
+                        HudConfig.WidgetBphX, HudConfig.WidgetBphY, 230, 31, this);
+                this.addRenderableWidget(wiBlockProfitPH);
+            }
+            if (ConfigMining.blockGoalWidgetEnabled) {
+                wiBlockGoal = new WiMiningGoal(true, HudConfig.BlockGoalX, HudConfig.BlockGoalY, this);
+                this.addRenderableWidget(wiBlockGoal);
+            }
+            if (ConfigMining.timeGoalWidgetEnabled) {
+                wiTimeGoal = new WiMiningGoal(false, HudConfig.TimeGoalX, HudConfig.TimeGoalY, this);
+                this.addRenderableWidget(wiTimeGoal);
+            }
+            if (ConfigMining.goalNotifications || ConfigClan.goalNotifications) {
+                wiGoalNotice = new WiGoalNotice(HudConfig.GoalNoticeX, HudConfig.GoalNoticeY, this);
+                this.addRenderableWidget(wiGoalNotice);
+            }
+            if (ConfigChat.chatTabsToggle) {
+                wiChatTabs = new WiChatTabs(this, null);
+                this.addRenderableWidget(wiChatTabs);
+            }
+            for (AdditionalGoals.Type type : AdditionalGoals.Type.values()) {
+                WiAdditionalGoal widget = new WiAdditionalGoal(type, this);
+                if (widget.enabled()) {
+                    additionalGoals.add(widget);
+                    this.addRenderableWidget(widget);
+                }
+            }
         }
-        }
-        if (focus == Focus.ALL || focus == Focus.BOSSES) {
+        if (ConfigBosses.widgetEnabled && (focus == Focus.ALL || focus == Focus.BOSSES)) {
             wiBosses = new WiRewards(false, HudConfig.BossX, HudConfig.BossY, this);
             this.addRenderableWidget(wiBosses);
         }
-        if (focus == Focus.ALL || focus == Focus.CLAN) {
+        if (ConfigClan.widgetEnabled && (focus == Focus.ALL || focus == Focus.CLAN)) {
             wiClan = new WiRewards(true, HudConfig.ClanX, HudConfig.ClanY, this);
             this.addRenderableWidget(wiClan);
         }

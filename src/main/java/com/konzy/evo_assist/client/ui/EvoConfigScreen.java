@@ -6,6 +6,8 @@ import com.konzy.evo_assist.client.EvoAssistClient;
 import com.konzy.evo_assist.client.config.Config;
 import com.konzy.evo_assist.client.features.goals.AdditionalGoals;
 import com.konzy.evo_assist.client.util.GoalAmount;
+import com.konzy.evo_assist.client.util.TimeUtils;
+import com.konzy.evo_assist.client.features.rewards.RewardMessageParser;
 import com.konzy.evo_assist.client.config.ConfigAutoclicker;
 import com.konzy.evo_assist.client.config.ConfigChat;
 import com.konzy.evo_assist.client.config.ConfigMining;
@@ -24,6 +26,7 @@ import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.FormattedCharSequence;
 import org.jspecify.annotations.NonNull;
 import org.lwjgl.glfw.GLFW;
 
@@ -32,6 +35,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.math.BigDecimal;
 
 public class EvoConfigScreen extends Screen {
     private static final int BACKDROP = 0x421A2028;
@@ -59,6 +63,10 @@ public class EvoConfigScreen extends Screen {
     private String resetFlashId;
     private long resetFlashAt;
     private String pendingResetId;
+    private record GoalChange(String id, String target) {}
+    private GoalChange pendingGoalChange;
+    private int confirmationScroll;
+    private List<FormattedCharSequence> confirmationLines = List.of();
     private static final long RESET_FLASH_DURATION_MS = 650;
     private final Map<String, Float> hoverProgress = new HashMap<>();
     private long lastHoverFrameNanos;
@@ -261,11 +269,16 @@ public class EvoConfigScreen extends Screen {
 
     private void renderControl(GuiGraphicsExtractor g, String id, int x, int y, int w, int h,
                                int mouseX, int mouseY) {
-        boolean hovered = inside(mouseX, mouseY, x, y, w, h)
+        renderControl(g, id, x, y, w, h, mouseX, mouseY, true);
+    }
+
+    private void renderControl(GuiGraphicsExtractor g, String id, int x, int y, int w, int h,
+                               int mouseX, int mouseY, boolean active) {
+        boolean hovered = active && inside(mouseX, mouseY, x, y, w, h)
                 && (id.equals("done") || (mouseY >= contentTop() && mouseY < contentBottom()));
         float amount = hoverAmount(id, hovered);
-        surface(g, x, y, x + w, y + h, mixColor(CONTROL, 0xF05B7183, amount));
-        int border = mixColor(0xFF8594A1, ACCENT, amount);
+        surface(g, x, y, x + w, y + h, active ? mixColor(CONTROL, 0xF05B7183, amount) : 0xFF303A43);
+        int border = active ? mixColor(0xFF8594A1, ACCENT, amount) : 0xFF596671;
         surface(g, x, y, x + w, y + 1, border);
         surface(g, x, y + h - 1, x + w, y + h, border);
         surface(g, x, y, x + 1, y + h, border);
@@ -353,7 +366,7 @@ public class EvoConfigScreen extends Screen {
         renderControl(g, "done", right() - 69, bottom() - 31, 60, 24, mouseX, mouseY);
         g.centeredText(font, tr("evoassist.ui.done"), right() - 39, bottom() - 23, TEXT);
         renderDropdown(g, mouseX, mouseY);
-        if (pendingResetId != null) renderResetConfirmation(g, mouseX, mouseY);
+        if (hasConfirmation()) renderResetConfirmation(g, mouseX, mouseY);
     }
 
     private int cardX() { return contentX() + 8; }
@@ -510,8 +523,10 @@ public class EvoConfigScreen extends Screen {
             return;
         }
         if (row.kind == Kind.EDITOR) {
-            renderControl(g, "editor:" + row.id, cx, cy - 2, cw, 22, mouseX, mouseY);
-            g.centeredText(font, tr("evoassist.ui.configure"), cx + cw / 2, cy + 5, TEXT);
+            boolean active = editorEnabled(row.id);
+            renderControl(g, "editor:" + row.id, cx, cy - 2, cw, 22, mouseX, mouseY, active);
+            g.centeredText(font, tr("evoassist.ui.configure"), cx + cw / 2, cy + 5,
+                    active ? TEXT : 0xFF7D8993);
             return;
         }
 
@@ -548,70 +563,241 @@ public class EvoConfigScreen extends Screen {
 
     private void renderResetButton(GuiGraphicsExtractor g, String id, int x, int y, int width, String label,
                                    int mouseX, int mouseY) {
-        renderControl(g, "reset:" + id, x, y, width, 22, mouseX, mouseY);
+        boolean active = resetAvailable(id);
+        renderControl(g, "reset:" + id, x, y, width, 22, mouseX, mouseY, active);
         long elapsed = System.currentTimeMillis() - resetFlashAt;
-        boolean flashing = id.equals(resetFlashId) && elapsed >= 0 && elapsed < RESET_FLASH_DURATION_MS;
+        boolean flashing = active && id.equals(resetFlashId) && elapsed >= 0 && elapsed < RESET_FLASH_DURATION_MS;
         if (flashing) {
             int alpha = (int) (220 * (RESET_FLASH_DURATION_MS - elapsed) / RESET_FLASH_DURATION_MS);
             surface(g, x, y, x + width, y + 22, (alpha << 24) | (ACCENT & 0x00FFFFFF));
         }
-        g.centeredText(font, flashing ? "✓" : label, x + width / 2, y + 7, TEXT);
+        if (active || isGoal(id)) {
+            g.centeredText(font, label, x + width / 2, y + 7, active ? TEXT : 0xFF7D8993);
+        } else {
+            var lines = font.split(Component.translatable("evoassist.ui.noStatistics"), Math.max(1, width - 8));
+            int textY = y + (22 - lines.size() * font.lineHeight) / 2;
+            for (var line : lines) {
+                g.text(font, line, x + (width - font.width(line)) / 2, textY, 0xFF7D8993);
+                textY += font.lineHeight;
+            }
+        }
     }
 
     private int resetDialogWidth() { return Math.min(300, width - 24); }
     private int resetDialogX() { return (width - resetDialogWidth()) / 2; }
-    private int resetDialogY() { return (height - 92) / 2; }
+    private List<FormattedCharSequence> resetDescriptionLines() {
+        List<String> lines = new ArrayList<>();
+        if (pendingGoalChange != null) {
+            lines.add(tr("evoassist.ui.currentProgress"));
+            addGoalStatistics(lines, pendingGoalChange.id);
+            lines.add(tr("evoassist.ui.newGoal", goalTargetLabel(pendingGoalChange.id, pendingGoalChange.target)));
+            lines.add("");
+            lines.add(tr("evoassist.ui.goalChangeWarning"));
+        } else {
+            addResetStatistics(lines, pendingResetId);
+            String key = switch (pendingResetId) {
+            case "resetMining" -> "evoassist.ui.resetMining.description";
+            case "resetGoals" -> "evoassist.ui.resetGoals.description";
+            case "resetClanGoals" -> "evoassist.ui.resetClanGoals.description";
+            case "resetBosses" -> "evoassist.ui.resetBosses.description";
+            case "resetClan" -> "evoassist.ui.resetClan.description";
+                default -> isGoal(pendingResetId) ? "evoassist.ui.goalChangeWarning" : "";
+            };
+            if (!key.isEmpty()) {
+                if (!lines.isEmpty()) lines.add("");
+                lines.add(tr(key));
+            }
+        }
+        return lines.isEmpty() ? List.of() : font.split(Component.literal(String.join("\n", lines)),
+                Math.max(1, resetDialogWidth() - 30));
+    }
+
+    private static void addMiningGoalStatistics(List<String> lines, boolean blocks) {
+        var goal = blocks ? MiningGoals.getInstance().blockGoal() : MiningGoals.getInstance().timeGoal();
+        lines.add(blocks ? tr("evoassist.hud.blocks") + RewardMessageParser.whole(goal.blocks) + " / " + RewardMessageParser.whole(goal.target())
+                : tr("evoassist.hud.time") + TimeUtils.asTextTime(goal.activeMillis) + " / " + TimeUtils.asTextTime(goal.target() * 60_000L));
+        if (blocks) lines.add(tr("evoassist.hud.time") + TimeUtils.asTextTime(goal.activeMillis));
+        else lines.add(tr("evoassist.hud.blocks") + RewardMessageParser.whole(goal.blocks));
+        lines.add(tr("evoassist.hud.money") + GoalAmount.format(BigDecimal.valueOf(goal.money))
+                + "; " + tr("evoassist.hud.shards") + RewardMessageParser.whole(goal.shards));
+    }
+
+    private static void addAdditionalGoalStatistics(List<String> lines, AdditionalGoals.Type type) {
+        var goal = AdditionalGoals.getInstance().goal(type);
+        lines.add(tr(type.title) + ": " + AdditionalGoals.format(type, goal.progress) + " / " + AdditionalGoals.format(type, goal.target));
+        if (!type.clan) {
+            lines.add(tr("evoassist.hud.blocks") + RewardMessageParser.whole(goal.blocks)
+                    + "; " + tr("evoassist.hud.time") + TimeUtils.asTextTime(goal.activeMillis));
+            lines.add(tr("evoassist.hud.money") + GoalAmount.format(goal.money)
+                    + "; " + tr("evoassist.hud.shards") + RewardMessageParser.whole(goal.shards));
+        }
+    }
+
+    private static void addGoalStatistics(List<String> lines, String id) {
+        var type = amountType(id);
+        if (type != null) addAdditionalGoalStatistics(lines, type);
+        else if (id.equals("blockGoal") || id.equals("timeGoal")) addMiningGoalStatistics(lines, id.equals("blockGoal"));
+    }
+
+    private static void addResetStatistics(List<String> lines, String id) {
+        switch (id) {
+            case "resetMining" -> {
+                var counter = BlockProfitPerHour.getInstance();
+                if (counter == null) return;
+                lines.add(tr("evoassist.hud.blocks") + RewardMessageParser.whole(counter.totalBrokenBlocks));
+                lines.add(tr("evoassist.hud.time") + TimeUtils.asTextTime(counter.uptime));
+                lines.add(tr("evoassist.hud.money") + GoalAmount.format(BigDecimal.valueOf(counter.totalMoney)));
+                lines.add(tr("evoassist.hud.shards") + RewardMessageParser.whole(counter.totalShards));
+            }
+            case "resetBosses", "resetClan" -> {
+                var totals = EvoAssistClient.rewardStatistics.current();
+                if (id.equals("resetBosses")) {
+                    lines.add(tr("evoassist.hud.money") + GoalAmount.format(totals.money));
+                    lines.add(tr("evoassist.hud.shards") + RewardMessageParser.whole(totals.shards));
+                    lines.add(tr("evoassist.hud.tokens") + RewardMessageParser.whole(totals.tokens));
+                } else {
+                    lines.add(tr("evoassist.hud.clanPoints") + RewardMessageParser.whole(totals.clanPoints));
+                    lines.add(tr("evoassist.hud.clanGold") + RewardMessageParser.whole(totals.clanGold));
+                    lines.add(tr("evoassist.hud.clanExperience") + RewardMessageParser.whole(totals.clanExperience));
+                }
+            }
+            case "resetGoals", "resetClanGoals" -> {
+                boolean clan = id.equals("resetClanGoals");
+                if (!clan) {
+                    if (MiningGoals.getInstance().blockGoal().hasProgress()) addMiningGoalStatistics(lines, true);
+                    if (MiningGoals.getInstance().timeGoal().hasProgress()) addMiningGoalStatistics(lines, false);
+                }
+                for (var type : AdditionalGoals.Type.values()) {
+                    if (type.clan == clan && AdditionalGoals.getInstance().goal(type).hasProgress())
+                        addAdditionalGoalStatistics(lines, type);
+                }
+            }
+            default -> {
+                if (isGoal(id)) {
+                    addGoalStatistics(lines, id);
+                    lines.add(tr("evoassist.ui.newGoal", goalTargetLabel(id, "0")));
+                }
+            }
+        }
+        if (!lines.isEmpty()) lines.addFirst(tr("evoassist.ui.willReset"));
+    }
+
+    private int confirmationBodyHeight() {
+        return Math.min(confirmationLines.size() * font.lineHeight, Math.max(font.lineHeight, height - 112));
+    }
+    private int confirmationMaxScroll() {
+        return Math.max(0, confirmationLines.size() * font.lineHeight - confirmationBodyHeight());
+    }
+    private int resetDialogHeight() {
+        return confirmationLines.isEmpty() ? 92 : 96 + confirmationBodyHeight();
+    }
+    private int resetDialogY() { return (height - resetDialogHeight()) / 2; }
+    private int resetDialogButtonsY() { return resetDialogY() + resetDialogHeight() - 34; }
     private int resetDialogButtonWidth() { return (resetDialogWidth() - 30) / 2; }
 
     private void renderResetConfirmation(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        confirmationLines = resetDescriptionLines();
         g.nextStratum();
         g.fill(0, 0, width, height, 0xAA000000);
         int x = resetDialogX();
         int y = resetDialogY();
         int w = resetDialogWidth();
-        g.fill(x, y, x + w, y + 92, 0xEE35404B);
+        int h = resetDialogHeight();
+        g.fill(x, y, x + w, y + h, 0xEE35404B);
         g.fill(x, y, x + w, y + 1, 0xFF91A2B1);
-        g.fill(x, y + 91, x + w, y + 92, 0xFF91A2B1);
-        g.fill(x, y, x + 1, y + 92, 0xFF91A2B1);
-        g.fill(x + w - 1, y, x + w, y + 92, 0xFF91A2B1);
-        g.centeredText(font, tr("evoassist.ui.confirmReset"), width / 2, y + 14, TEXT);
-        String target = switch (pendingResetId) {
+        g.fill(x, y + h - 1, x + w, y + h, 0xFF91A2B1);
+        g.fill(x, y, x + 1, y + h, 0xFF91A2B1);
+        g.fill(x + w - 1, y, x + w, y + h, 0xFF91A2B1);
+        g.centeredText(font, tr(pendingGoalChange != null ? "evoassist.ui.confirmGoalChange" : "evoassist.ui.confirmReset"), width / 2, y + 14, TEXT);
+        String subjectId = pendingGoalChange != null ? pendingGoalChange.id : pendingResetId;
+        String target = switch (subjectId) {
             case "resetMining" -> tr("evoassist.ui.resetMining.subject");
             case "resetGoals" -> tr("evoassist.ui.resetGoals.subject");
             case "resetClanGoals" -> tr("evoassist.ui.resetClanGoals.subject");
             case "resetBosses" -> tr("evoassist.ui.resetBosses.subject");
             case "resetClan" -> tr("evoassist.ui.resetClan.subject");
-            default -> rows().stream().filter(row -> row.id.equals(pendingResetId))
+            default -> rows().stream().filter(row -> row.id.equals(subjectId))
                     .map(row -> row.title).findFirst().orElse(tr("evoassist.ui.setting"));
         };
         g.centeredText(font, fit(target, w - 20), width / 2, y + 33, MUTED);
+        confirmationScroll = Math.clamp(confirmationScroll, 0, confirmationMaxScroll());
+        int textY = y + 50 - confirmationScroll;
+        g.enableScissor(x + 12, y + 50, x + w - 12, y + 50 + confirmationBodyHeight());
+        for (var line : confirmationLines) {
+            g.text(font, line, x + (w - font.width(line)) / 2, textY, MUTED);
+            textY += font.lineHeight;
+        }
+        g.disableScissor();
+        if (confirmationMaxScroll() > 0) {
+            int bodyHeight = confirmationBodyHeight();
+            int thumbHeight = Math.max(8, bodyHeight * bodyHeight / (bodyHeight + confirmationMaxScroll()));
+            int thumbY = y + 50 + (bodyHeight - thumbHeight) * confirmationScroll / confirmationMaxScroll();
+            g.fill(x + w - 8, y + 50, x + w - 6, y + 50 + bodyHeight, TRACK);
+            g.fill(x + w - 8, thumbY, x + w - 6, thumbY + thumbHeight, MUTED);
+        }
         int buttonWidth = resetDialogButtonWidth();
-        renderDialogButton(g, "cancelReset", tr("evoassist.ui.cancel"), x + 10, y + 58, buttonWidth, mouseX, mouseY);
-        renderDialogButton(g, "confirmReset", tr("evoassist.ui.resetAction"), x + 20 + buttonWidth, y + 58,
-                buttonWidth, mouseX, mouseY);
+        int buttonY = resetDialogButtonsY();
+        renderDialogButton(g, "cancelReset", tr("evoassist.ui.cancel"), x + 10, buttonY, buttonWidth, mouseX, mouseY, true);
+        renderDialogButton(g, "confirmReset", tr(pendingGoalChange != null ? "evoassist.ui.setGoal" : "evoassist.ui.resetAction"),
+                x + 20 + buttonWidth, buttonY, buttonWidth, mouseX, mouseY,
+                pendingGoalChange != null || resetAvailable(pendingResetId));
     }
 
     private void renderDialogButton(GuiGraphicsExtractor g, String id, String label,
-                                    int x, int y, int w, int mouseX, int mouseY) {
-        float amount = hoverAmount(id, inside(mouseX, mouseY, x, y, w, 24));
-        g.fill(x, y, x + w, y + 24, mixColor(0xFF405061, 0xFF5B7183, amount));
-        int border = mixColor(0xFF91A2B1, ACCENT, amount);
+                                    int x, int y, int w, int mouseX, int mouseY, boolean active) {
+        float amount = hoverAmount(id, active && inside(mouseX, mouseY, x, y, w, 24));
+        g.fill(x, y, x + w, y + 24, active ? mixColor(0xFF405061, 0xFF5B7183, amount) : 0xFF303A43);
+        int border = active ? mixColor(0xFF91A2B1, ACCENT, amount) : 0xFF596671;
         g.fill(x, y, x + w, y + 1, border);
         g.fill(x, y + 23, x + w, y + 24, border);
         g.fill(x, y, x + 1, y + 24, border);
         g.fill(x + w - 1, y, x + w, y + 24, border);
-        g.centeredText(font, label, x + w / 2, y + 8, TEXT);
+        g.centeredText(font, label, x + w / 2, y + 8, active ? TEXT : 0xFF7D8993);
+    }
+
+    private static boolean resetAvailable(String id) {
+        var type = amountType(id);
+        if (type != null) {
+            try {
+                return GoalAmount.parse(AdditionalGoals.configuredTarget(type), type.whole()).signum() != 0;
+            } catch (IllegalArgumentException error) {
+                return true; // Allow clearing an invalid value entered through another config editor.
+            }
+        }
+        return switch (id) {
+            case "blockGoal" -> ConfigMining.blockGoalTarget != 0;
+            case "timeGoal" -> ConfigMining.timeGoalMinutes != 0;
+            case "resetMining" -> {
+                var counter = BlockProfitPerHour.getInstance();
+                yield counter != null && counter.hasStatistics();
+            }
+            case "resetGoals" -> MiningGoals.getInstance().hasProgress() || AdditionalGoals.getInstance().hasProgress(false);
+            case "resetClanGoals" -> AdditionalGoals.getInstance().hasProgress(true);
+            case "resetBosses" -> EvoAssistClient.rewardStatistics != null && EvoAssistClient.rewardStatistics.hasBossStatistics();
+            case "resetClan" -> EvoAssistClient.rewardStatistics != null && EvoAssistClient.rewardStatistics.hasClanStatistics();
+            default -> true;
+        };
     }
 
     private void requestReset(String id) {
+        if (!resetAvailable(id)) return;
         pendingResetId = id;
+        confirmationScroll = 0;
+        confirmationLines = resetDescriptionLines();
         openDropdown = null;
     }
 
     private void confirmReset() {
+        if (pendingGoalChange != null) {
+            GoalChange change = pendingGoalChange;
+            pendingGoalChange = null;
+            applyGoalChange(change.id, change.target);
+            save();
+            return;
+        }
         String id = pendingResetId;
         pendingResetId = null;
-        if (id == null) return;
+        if (id == null || !resetAvailable(id)) return;
         switch (id) {
             case "resetMining" -> resetMining();
             case "resetGoals" -> resetGoals();
@@ -630,6 +816,25 @@ public class EvoConfigScreen extends Screen {
     private void startResetFlash(String id) {
         resetFlashId = id;
         resetFlashAt = System.currentTimeMillis();
+    }
+
+    private static boolean editorEnabled(String id) {
+        return enabled(switch (id) {
+            case "editMining" -> "miningWidget";
+            case "editBlockGoal" -> "blockGoalWidget";
+            case "editTimeGoal" -> "timeGoalWidget";
+            case "editMoneyGoal" -> "moneyGoalWidget";
+            case "editShardGoal" -> "shardGoalWidget";
+            case "editGoalNotice" -> "goalNotifications";
+            case "editBosses" -> "bossWidget";
+            case "editClan" -> "clanWidget";
+            case "editClanPointsGoal" -> "clanPointsGoalWidget";
+            case "editClanGoldGoal" -> "clanGoldGoalWidget";
+            case "editClanExperienceGoal" -> "clanExperienceGoalWidget";
+            case "editClanGoalNotice" -> "clanGoalNotifications";
+            case "editChatTabs" -> "chatTabs";
+            default -> "";
+        });
     }
 
     private static boolean enabled(String id) {
@@ -853,17 +1058,56 @@ public class EvoConfigScreen extends Screen {
         AdditionalGoals.getInstance().syncTargets();
     }
 
-    private void commitEditing() {
-        if (editingId == null) return;
+    private static boolean isGoal(String id) {
+        return id.equals("blockGoal") || id.equals("timeGoal") || amountType(id) != null;
+    }
+
+    private static String goalTargetLabel(String id, String target) {
+        var type = amountType(id);
+        if (type != null) return AdditionalGoals.format(type, new BigDecimal(target));
+        long value = Long.parseLong(target);
+        return id.equals("timeGoal") ? TimeUtils.asTextTime(value * 60_000L) : RewardMessageParser.whole(value);
+    }
+
+    private static boolean wouldResetGoalProgress(String id, String target) {
+        var type = amountType(id);
+        if (type != null) return AdditionalGoals.getInstance().goal(type).wouldResetProgress(new BigDecimal(target));
+        var goal = id.equals("blockGoal") ? MiningGoals.getInstance().blockGoal() : MiningGoals.getInstance().timeGoal();
+        return goal.wouldResetProgress(Integer.parseInt(target));
+    }
+
+    private static void applyGoalChange(String id, String target) {
+        if (amountType(id) != null) setAmount(id, target);
+        else setValue(id, Integer.parseInt(target));
+    }
+
+    private boolean hasConfirmation() { return pendingResetId != null || pendingGoalChange != null; }
+
+    private void cancelConfirmation() {
+        pendingResetId = null;
+        pendingGoalChange = null;
+        confirmationScroll = 0;
+        confirmationLines = List.of();
+    }
+
+    private boolean commitEditing() {
+        if (editingId == null) return !hasConfirmation();
         String id = editingId;
         try {
             if (!editingText.isEmpty()) {
-                if (amountType(id) != null) setAmount(id, editingText);
+                String target;
+                if (amountType(id) != null) target = AdditionalGoals.parseTarget(amountType(id), editingText).toPlainString();
                 else {
                     int typed = Integer.parseInt(editingText);
-                    rows().stream().filter(item -> item.id.equals(id)).findFirst().ifPresent(row ->
-                            setValue(id, Math.max(row.min, Math.min(row.max, typed))));
+                    Row row = rows().stream().filter(item -> item.id.equals(id)).findFirst().orElseThrow();
+                    target = Integer.toString(Math.clamp(typed, row.min, row.max));
                 }
+                if (isGoal(id) && wouldResetGoalProgress(id, target)) {
+                    pendingGoalChange = new GoalChange(id, target);
+                    confirmationScroll = 0;
+                    confirmationLines = resetDescriptionLines();
+                    openDropdown = null;
+                } else applyGoalChange(id, target);
             }
         } catch (IllegalArgumentException error) {
             feedback = amountType(id) == null ? tr("evoassist.ui.integerRequired") : error.getMessage();
@@ -871,16 +1115,18 @@ public class EvoConfigScreen extends Screen {
         }
         editingId = null;
         save();
+        return !hasConfirmation();
     }
 
     private void save() {
         EvoAssistClient.configurator.saveConfig(Config.class);
     }
 
-    private void prepareControlClick() {
-        commitEditing();
+    private boolean prepareControlClick() {
+        boolean ready = commitEditing();
         capturingKeyId = null;
         openDropdown = null;
+        return ready;
     }
 
     private static boolean inside(double mx, double my, int x, int y, int w, int h) {
@@ -889,13 +1135,13 @@ public class EvoConfigScreen extends Screen {
 
     @Override
     public boolean mouseClicked(@NonNull MouseButtonEvent event, boolean doubleClick) {
-        if (pendingResetId != null) {
+        if (hasConfirmation()) {
             if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
                 int x = resetDialogX();
-                int y = resetDialogY() + 58;
+                int y = resetDialogButtonsY();
                 int buttonWidth = resetDialogButtonWidth();
                 if (inside(event.x(), event.y(), x + 10, y, buttonWidth, 24)) {
-                    pendingResetId = null;
+                    cancelConfirmation();
                 } else if (inside(event.x(), event.y(), x + 20 + buttonWidth, y, buttonWidth, 24)) {
                     confirmReset();
                 }
@@ -912,7 +1158,7 @@ public class EvoConfigScreen extends Screen {
             List<DropdownOption> options = dropdownOptions();
             if (my >= popup.y + 2 && my < popup.y + popup.height - 2
                     && optionIndex >= 0 && optionIndex < options.size()) {
-                commitEditing();
+                if (!commitEditing()) return true;
                 capturingKeyId = null;
                 selectOption(options.get(optionIndex).id);
             }
@@ -920,7 +1166,7 @@ public class EvoConfigScreen extends Screen {
         }
 
         if (inside(mx, my, widgetEditorButtonX(), widgetEditorButtonY(), 20, 20)) {
-            prepareControlClick();
+            if (!prepareControlClick()) return true;
             save();
             minecraft.gui.setScreen(new WidgetScreen(this));
             return true;
@@ -928,7 +1174,7 @@ public class EvoConfigScreen extends Screen {
         int navY = top() + 48;
         for (Page item : Page.values()) {
             if (inside(mx, my, left() + 7, navY, sidebarWidth() - 14, navHeight())) {
-                prepareControlClick();
+                if (!prepareControlClick()) return true;
                 page = item;
                 scroll = 0;
                 return true;
@@ -936,7 +1182,7 @@ public class EvoConfigScreen extends Screen {
             navY += navStep();
         }
         if (inside(mx, my, right() - 69, bottom() - 31, 60, 24)) {
-            prepareControlClick();
+            if (!prepareControlClick()) return true;
             onClose();
             return true;
         }
@@ -955,55 +1201,55 @@ public class EvoConfigScreen extends Screen {
                     case SECTION -> { }
                     case TOGGLE -> {
                         if (inside(mx, my, cx + cw - 32, cy + 2, 32, 14)) {
-                            prepareControlClick();
+                            if (!prepareControlClick()) return true;
                             toggle(row.id);
                         }
                     }
                     case CHOICE, MULTI -> {
                         if (inside(mx, my, comboX(), cy - 2, comboWidth(), 22)) {
                             String previousDropdown = openDropdown;
-                            prepareControlClick();
+                            if (!prepareControlClick()) return true;
                             openDropdown = row.id.equals(previousDropdown) ? null : row.id;
                         }
                     }
                     case KEY -> {
                         if (inside(mx, my, cx, cy - 2, cw, 22)) {
-                            prepareControlClick();
+                            if (!prepareControlClick()) return true;
                             capturingKeyId = row.id;
                         }
                     }
                     case ACTION -> {
-                        if (inside(mx, my, cx, cy - 2, cw, 22)) {
-                            prepareControlClick();
+                        if (resetAvailable(row.id) && inside(mx, my, cx, cy - 2, cw, 22)) {
+                            if (!prepareControlClick()) return true;
                             requestReset(row.id);
                         }
                     }
                     case EDITOR -> {
-                        if (inside(mx, my, cx, cy - 2, cw, 22)) {
-                            prepareControlClick();
+                        if (editorEnabled(row.id) && inside(mx, my, cx, cy - 2, cw, 22)) {
+                            if (!prepareControlClick()) return true;
                             save();
                             minecraft.gui.setScreen(new WidgetScreen(this));
                         }
                     }
                     case NUMBER, AMOUNT -> {
                         int boxX = cx + cw - 110;
-                        if (inside(mx, my, resetX(), cy - 2, 39, 22)) {
-                            prepareControlClick();
+                        if (resetAvailable(row.id) && inside(mx, my, resetX(), cy - 2, 39, 22)) {
+                            if (!prepareControlClick()) return true;
                             requestReset(row.id);
                         } else if (inside(mx, my, boxX, cy - 2, 68, 22)) {
-                            prepareControlClick();
+                            if (!prepareControlClick()) return true;
                             startEditing(row.id);
                         }
                     }
                     case SLIDER, CPS -> {
                         if (inside(mx, my, resetX(), cy - 2, 39, 22)) {
-                            prepareControlClick();
+                            if (!prepareControlClick()) return true;
                             requestReset(row.id);
                         } else if (inside(mx, my, valueX(), cy - 2, 40, 22)) {
-                            prepareControlClick();
+                            if (!prepareControlClick()) return true;
                             startEditing(row.id);
                         } else if (inside(mx, my, sliderStart(row) - 4, cy + 2, sliderWidth(row) + 8, 16)) {
-                            prepareControlClick();
+                            if (!prepareControlClick()) return true;
                             draggingSlider = row;
                             updateSlider(row, mx);
                         }
@@ -1018,7 +1264,7 @@ public class EvoConfigScreen extends Screen {
 
     @Override
     public boolean mouseDragged(@NonNull MouseButtonEvent event, double dx, double dy) {
-        if (pendingResetId != null) return true;
+        if (hasConfirmation()) return true;
         if (draggingSlider != null) {
             updateSlider(draggingSlider, event.x());
             return true;
@@ -1039,7 +1285,11 @@ public class EvoConfigScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double xAmount, double yAmount) {
-        if (pendingResetId != null) return true;
+        if (hasConfirmation()) {
+            confirmationScroll = Math.clamp(confirmationScroll - (int) Math.round(yAmount * font.lineHeight * 3),
+                    0, confirmationMaxScroll());
+            return true;
+        }
         if (inside(mouseX, mouseY, contentX(), contentTop(), contentWidth(), contentBottom() - contentTop())) {
             openDropdown = null;
             scroll = Math.max(0, Math.min(maxScroll(), scroll - (int) Math.round(yAmount * 28)));
@@ -1050,9 +1300,12 @@ public class EvoConfigScreen extends Screen {
 
     @Override
     public boolean keyPressed(@NonNull KeyEvent event) {
-        if (pendingResetId != null) {
-            if (event.key() == GLFW.GLFW_KEY_ESCAPE) pendingResetId = null;
+        if (hasConfirmation()) {
+            if (event.key() == GLFW.GLFW_KEY_ESCAPE) cancelConfirmation();
             else if (event.key() == GLFW.GLFW_KEY_ENTER || event.key() == GLFW.GLFW_KEY_KP_ENTER) confirmReset();
+            else if (event.key() == GLFW.GLFW_KEY_UP || event.key() == GLFW.GLFW_KEY_DOWN)
+                confirmationScroll = Math.clamp(confirmationScroll + (event.key() == GLFW.GLFW_KEY_DOWN ? 1 : -1) * font.lineHeight * 3,
+                        0, confirmationMaxScroll());
             return true;
         }
         if (capturingKeyId != null) {
@@ -1098,7 +1351,7 @@ public class EvoConfigScreen extends Screen {
 
     @Override
     public boolean charTyped(@NonNull CharacterEvent event) {
-        if (pendingResetId != null) return true;
+        if (hasConfirmation()) return true;
         if (editingId != null) {
             int cp = event.codepoint();
             boolean amount = amountType(editingId) != null;
@@ -1114,7 +1367,7 @@ public class EvoConfigScreen extends Screen {
 
     @Override
     public void onClose() {
-        commitEditing();
+        if (!commitEditing()) return;
         save();
         minecraft.gui.setScreen(parent);
     }

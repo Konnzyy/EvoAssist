@@ -44,6 +44,17 @@ public final class RewardStatistics {
     public Totals current() { return servers.computeIfAbsent(currentServer, key -> new Totals()); }
     public boolean hasServer() { return !currentServer.isEmpty(); }
     public boolean isConnected() { return connected; }
+    public boolean hasBossStatistics() {
+        if (!hasServer()) return false;
+        Totals totals = current();
+        return totals.money.signum() != 0 || totals.shards != 0 || totals.tokens != 0;
+    }
+
+    public boolean hasClanStatistics() {
+        if (!hasServer()) return false;
+        Totals totals = current();
+        return totals.clanPoints != 0 || totals.clanExperience != 0 || totals.clanGold != 0;
+    }
 
     public void connect(String address) {
         currentServer = address.strip().toLowerCase(Locale.ROOT);
