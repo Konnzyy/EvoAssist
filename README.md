@@ -1,4 +1,3 @@
-```md
 # EvoAssist для Minecraft 26.2
 
 Клиентский Fabric-мод для DiamondWorld Prison Evo.
