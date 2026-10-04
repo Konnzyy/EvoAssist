@@ -128,18 +128,39 @@ public final class MiningGoals {
         savePeriodically();
     }
 
-    public void priceForPendingBlocks(long pricePerBlock) {
+    public void recordBlockReward(long pricePerBlock) {
         if (pricePerBlock <= 0) return;
-        AdditionalGoals.getInstance().priceForPendingBlocks(pricePerBlock);
-        if (blocks.pendingPriceBlocks > 0) {
-            blocks.money += pricePerBlock * blocks.pendingPriceBlocks;
-            blocks.pendingPriceBlocks = 0;
+        AdditionalGoals.getInstance().recordBlockReward(pricePerBlock);
+        syncTargets();
+        creditBlockReward(blocks, pricePerBlock);
+        creditBlockReward(time, pricePerBlock);
+        savePeriodically();
+    }
+
+    public void recordPendingBlockRewards(long pricePerBlock) {
+        if (pricePerBlock <= 0) return;
+        AdditionalGoals.getInstance().recordPendingBlockRewards(pricePerBlock);
+        syncTargets();
+        creditPendingRewards(blocks, pricePerBlock);
+        creditPendingRewards(time, pricePerBlock);
+        savePeriodically();
+    }
+
+    private static void creditPendingRewards(Goal goal, long price) {
+        int count = goal.pendingPriceBlocks;
+        goal.pendingPriceBlocks = 0;
+        if (count <= 0) return;
+        long earned = price > Long.MAX_VALUE / count ? Long.MAX_VALUE : price * count;
+        goal.money = earned > Long.MAX_VALUE - goal.money ? Long.MAX_VALUE : goal.money + earned;
+    }
+
+    private static void creditBlockReward(Goal goal, long price) {
+        if (goal.pendingPriceBlocks > 0) {
+            goal.pendingPriceBlocks--;
+            goal.money += price;
+        } else if (goal.active() && !goal.complete) {
+            goal.money += price;
         }
-        if (time.pendingPriceBlocks > 0) {
-            time.money += pricePerBlock * time.pendingPriceBlocks;
-            time.pendingPriceBlocks = 0;
-        }
-        save();
     }
 
     public void expirePendingPrices() {

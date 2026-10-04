@@ -11,7 +11,7 @@ public final class RewardMessageParser {
     public enum Type { MONEY, SHARDS, TOKENS, CLAN_POINTS, CLAN_EXPERIENCE, CLAN_GOLD }
     public record Reward(Type type, BigDecimal amount) {}
     private static final Pattern LINE = Pattern.compile(
-            "^\\+\\s*(\\d+(?:[ \\u00a0\\u202f]\\d{3})*(?:[.,]\\d+)?)([KMBTQ]?)\\s*(.*?)\\s*$",
+            "^(\\+)?\\s*(\\d+(?:[ \\u00a0\\u202f]\\d{3})*(?:[.,]\\d+)?)([KMBTQ]?)\\s*(.*?)\\s*$",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern BONUS = Pattern.compile("\\s*\\([^)]*бонус[^)]*\\)\\s*$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final String[] SUFFIXES = { "", "K", "M", "B", "T", "Q" };
@@ -22,8 +22,9 @@ public final class RewardMessageParser {
         String clean = line.replaceAll("§.", "").replace('\u00a0', ' ').replace('\u202f', ' ').strip();
         Matcher match = LINE.matcher(clean);
         if (!match.matches()) return Optional.empty();
-        String suffix = match.group(2).toUpperCase(Locale.ROOT);
-        String label = BONUS.matcher(match.group(3)).replaceFirst("").strip().toLowerCase(Locale.ROOT);
+        boolean hasPlus = match.group(1) != null;
+        String suffix = match.group(3).toUpperCase(Locale.ROOT);
+        String label = BONUS.matcher(match.group(4)).replaceFirst("").strip().toLowerCase(Locale.ROOT);
         Type type;
         if (label.matches("очк(?:о|а|ов) клана")) type = Type.CLAN_POINTS;
         else if (label.matches("опыт(?:а)? клана")) type = Type.CLAN_EXPERIENCE;
@@ -33,9 +34,10 @@ public final class RewardMessageParser {
         else if (label.equals("\uE135") || label.equals("$") || label.matches("ден(?:ьги|ег)")
                 || label.isEmpty()) type = Type.MONEY;
         else return Optional.empty();
+        if (!hasPlus && type != Type.CLAN_EXPERIENCE && type != Type.CLAN_GOLD) return Optional.empty();
         // Only money has a compact suffix; reward counts are whole values.
         if (type != Type.MONEY && !suffix.isEmpty()) return Optional.empty();
-        BigDecimal amount = new BigDecimal(match.group(1).replaceAll("[ \\u00a0\\u202f]", "").replace(',', '.'));
+        BigDecimal amount = new BigDecimal(match.group(2).replaceAll("[ \\u00a0\\u202f]", "").replace(',', '.'));
         int exponent = switch (suffix) {
             case "K" -> 3; case "M" -> 6; case "B" -> 9; case "T" -> 12; case "Q" -> 15; default -> 0;
         };

@@ -25,8 +25,8 @@ import java.util.regex.Pattern;
 public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
 
     // Config
-    private static final long MAX_LATEST_ACTION_BAR_MS = 10_000;
     private static final long AUTO_PAUSE_AFTER_MS = 5_000;
+    private static final long PRICE_FRESH_MS = 10_000;
     private final MiningStatistics statistics;
     
     public long totalBrokenBlocks = 0;
@@ -34,10 +34,9 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
     public long totalMoney = 0;
     public long totalShards = 0;
     private long lastBlockBreakAt = -1;
-    private long lastActionBarAt = -1;
-    private int blocksAwaitingPrice = 0;
-    private long latestActionBar = 0;
-    private long latestActionBarTimeout = 100;
+    private long lastPriceAt = -1;
+    private long latestPrice;
+    private long blocksAwaitingPrice;
     public boolean paused = true;
 
     public long BlocksPerHour = 0;
@@ -45,9 +44,9 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
     public long ShardsPerHour = 0;
 
 
-    static Pattern moneyPattern = Pattern.compile("(\\d+(?:\\.\\d+)?[KMBTQ])", Pattern.CASE_INSENSITIVE);
-    static Pattern actionBarPattern = Pattern.compile("\\+(\\d+(?:\\.\\d+)?[KMBTQ]?)", Pattern.CASE_INSENSITIVE);
-    static Pattern shardMultiplierPattern = Pattern.compile("(\\d+)");
+    private static final Pattern MONEY_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+)?[KMBTQ])", Pattern.CASE_INSENSITIVE);
+    private static final Pattern ACTION_BAR_PATTERN = Pattern.compile("\\+\\s*(\\d+(?:[.,]\\d+)?[KMBTQ]?)", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SHARD_MULTIPLIER_PATTERN = Pattern.compile("(\\d+)");
 
     public BlockProfitPerHour(MiningStatistics statistics) {
         this.statistics = statistics;
@@ -55,32 +54,34 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
     }
 
     public void connect(String address) {
+        flushKnownPendingPrice();
         clearActivity();
         statistics.connect(address);
         refreshStatistics();
     }
 
     public void disconnect() {
+        flushKnownPendingPrice();
         statistics.disconnect();
         clearActivity();
         refreshStatistics();
     }
 
     @Override
-    public void afterBlockBreak(@NonNull ClientLevel world, @NonNull LocalPlayer playerEntity, @NonNull BlockPos blockPos, @NonNull BlockState blockState) {
+    public void afterBlockBreak(@NonNull ClientLevel world, @NonNull LocalPlayer player,
+                                @NonNull BlockPos pos, @NonNull BlockState state) {
         if (!statistics.isConnected()) return;
         long now = System.currentTimeMillis();
-        if(lastBlockBreakAt < 0 || now - lastBlockBreakAt > 2_000) {
-            blocksAwaitingPrice = 0;
-            MiningGoals.getInstance().expirePendingPrices();
-        }
-        record(1, 0, 0);
         lastBlockBreakAt = now;
         paused = false;
-        AdditionalGoals.getInstance().blockBroken(!(lastActionBarAt >= 0 && now - lastActionBarAt <= MAX_LATEST_ACTION_BAR_MS));
-        boolean pricePending = addMoney(now);
-        MiningGoals.getInstance().blockBroken(pricePending);
+        boolean priced = latestPrice > 0 && lastPriceAt >= 0 && now - lastPriceAt <= PRICE_FRESH_MS;
+        record(1, priced && countBlockMoney() ? latestPrice : 0, 0);
+        AdditionalGoals.getInstance().blockBroken(true);
+        MiningGoals.getInstance().blockBroken(true);
+        if (priced) MiningGoals.getInstance().recordBlockReward(latestPrice);
+        else blocksAwaitingPrice++;
     }
+
     public boolean hasStatistics() {
         return totalBrokenBlocks != 0 || uptime != 0 || totalMoney != 0 || totalShards != 0;
     }
@@ -93,36 +94,42 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
 
     private void clearActivity() {
         lastBlockBreakAt = -1;
-        lastActionBarAt = -1;
+        lastPriceAt = -1;
+        latestPrice = 0;
         blocksAwaitingPrice = 0;
-        latestActionBar = 0;
-        latestActionBarTimeout = 100;
+        MiningGoals.getInstance().expirePendingPrices();
         paused = true;
     }
     public void updateActionBar(Component text) {
         if (!statistics.isConnected()) return;
-        Matcher matchingText = actionBarPattern.matcher(text.getString().replaceAll("§.", ""));
+        Matcher matchingText = ACTION_BAR_PATTERN.matcher(text.getString().replaceAll("§.", ""));
         if(matchingText.find()) {
-
-            long price = MoneyUtils.convertFrom(matchingText.group(1));
-            if(price / 10 > latestActionBar && latestActionBarTimeout < 10) {
-                latestActionBarTimeout++;
-            } else {
-                latestActionBar = price;
-                latestActionBarTimeout = 0;
-                long now = System.currentTimeMillis();
-                lastActionBarAt = now;
-                if(blocksAwaitingPrice > 0 && lastBlockBreakAt >= 0 && now - lastBlockBreakAt <= 2_000) {
-                    long earned = price > Long.MAX_VALUE / blocksAwaitingPrice
-                            ? Long.MAX_VALUE : price * blocksAwaitingPrice;
-                    if (Arrays.asList(ConfigMining.bphWidgetAllowed).contains(ConfigMining.bphAllowEnum.BLOCKS)) {
-                        record(0, earned, 0);
-                    }
-                    MiningGoals.getInstance().priceForPendingBlocks(price);
-                }
-                blocksAwaitingPrice = 0;
-            }
+            long price = MoneyUtils.convertFrom(matchingText.group(1).replace(',', '.'));
+            if (price <= 0) return;
+            latestPrice = price;
+            lastPriceAt = System.currentTimeMillis();
+            if (blocksAwaitingPrice > 0) creditPendingBlocks(price);
         }
+    }
+
+    private boolean countBlockMoney() {
+        return Arrays.asList(ConfigMining.bphWidgetAllowed).contains(ConfigMining.bphAllowEnum.BLOCKS);
+    }
+
+    private void flushKnownPendingPrice() {
+        if (statistics.isConnected() && blocksAwaitingPrice > 0 && latestPrice > 0) {
+            creditPendingBlocks(latestPrice);
+        }
+    }
+
+    private void creditPendingBlocks(long price) {
+        long count = blocksAwaitingPrice;
+        blocksAwaitingPrice = 0;
+        if (countBlockMoney()) {
+            long estimated = price > Long.MAX_VALUE / count ? Long.MAX_VALUE : price * count;
+            record(0, estimated, 0);
+        }
+        MiningGoals.getInstance().recordPendingBlockRewards(price);
     }
 
     public void getMessage(Component text, boolean overlay) {
@@ -130,10 +137,8 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
         String msg = text.getString();
 
         if(msg.startsWith("Вы нашли шард!")) {
-
-            latestActionBarTimeout = 0;
             if (msg.length() > 14) {
-                Matcher matcher = shardMultiplierPattern.matcher(msg);
+                Matcher matcher = SHARD_MULTIPLIER_PATTERN.matcher(msg);
                 if (matcher.find(1)) {
                     int earned = Integer.parseInt(matcher.group(1));
                     record(0, 0, earned);
@@ -148,13 +153,11 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
 
         boolean found = isFound(msg);
         if(found) {
-            Matcher matchingText = moneyPattern.matcher(text.getString().replaceAll("§.", ""));
+            Matcher matchingText = MONEY_PATTERN.matcher(text.getString().replaceAll("§.", ""));
             if(matchingText.find()) {
                 long price = MoneyUtils.convertFrom(matchingText.group(1));
                 record(0, price, 0);
                 MiningGoals.getInstance().moneyEarned(price);
-
-                latestActionBarTimeout = 0;
             }
         }
     }
@@ -192,19 +195,6 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
 
         }
         return found;
-    }
-
-    private boolean addMoney(long now) {
-        if(lastActionBarAt >= 0 && now - lastActionBarAt <= MAX_LATEST_ACTION_BAR_MS) {
-            if (Arrays.asList(ConfigMining.bphWidgetAllowed).contains(ConfigMining.bphAllowEnum.BLOCKS)) {
-                record(0, latestActionBar, 0);
-            }
-            MiningGoals.getInstance().moneyEarned(latestActionBar);
-            return false;
-        } else {
-            blocksAwaitingPrice++;
-            return true;
-        }
     }
 
     public static BlockProfitPerHour getInstance() {

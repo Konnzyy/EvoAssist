@@ -213,19 +213,34 @@ public final class AdditionalGoals {
         savePeriodically();
     }
 
-    public void priceForPendingBlocks(long price) {
+    public void recordBlockReward(long price) {
+        if (price <= 0) return;
+        syncTargets();
+        BigDecimal amount = BigDecimal.valueOf(price);
+        for (Goal goal : mining.values()) {
+            boolean pending = goal.pendingBlocks > 0;
+            if (pending) goal.pendingBlocks--;
+            if (pending || goal.running()) {
+                goal.money = goal.money.add(amount);
+            }
+        }
+        advance(Type.MONEY, amount);
+        savePeriodically();
+    }
+
+    public void recordPendingBlockRewards(long price) {
         if (price <= 0) return;
         syncTargets();
         for (var entry : mining.entrySet()) {
             Goal goal = entry.getValue();
-            if (goal.running() && goal.pendingBlocks > 0) {
-                BigDecimal amount = BigDecimal.valueOf(price).multiply(BigDecimal.valueOf(goal.pendingBlocks));
-                goal.money = goal.money.add(amount);
-                if (entry.getKey() == Type.MONEY) advance(Type.MONEY, amount);
-            }
+            long count = goal.pendingBlocks;
             goal.pendingBlocks = 0;
+            if (count <= 0) continue;
+            BigDecimal amount = BigDecimal.valueOf(price).multiply(BigDecimal.valueOf(count));
+            goal.money = goal.money.add(amount);
+            if (entry.getKey() == Type.MONEY) advance(Type.MONEY, amount);
         }
-        save();
+        savePeriodically();
     }
 
     public void expirePendingPrices() { mining.values().forEach(goal -> goal.pendingBlocks = 0); }
