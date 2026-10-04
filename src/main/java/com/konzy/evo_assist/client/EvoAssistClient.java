@@ -28,6 +28,7 @@ import com.konzy.evo_assist.client.ui.widgets.WiMiningGoal;
 import com.konzy.evo_assist.client.ui.widgets.WiGoalNotice;
 import com.konzy.evo_assist.client.ui.widgets.WWidget;
 import com.konzy.evo_assist.client.ui.widgets.WiRewards;
+import com.konzy.evo_assist.client.ui.widgets.WiBossTokens;
 import com.teamresourceful.resourcefulconfig.api.loader.Configurator;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
@@ -71,6 +72,7 @@ public class EvoAssistClient implements ClientModInitializer {
     private WWidget wTimeGoal;
     private WWidget wGoalNotice;
     private WWidget wBosses;
+    private WWidget wBossTokens;
     private WWidget wClan;
     private final EnumMap<AdditionalGoals.Type, WiAdditionalGoal> additionalGoalWidgets = new EnumMap<>(AdditionalGoals.Type.class);
     private final List<WWidget> hudWidgets = new ArrayList<>();
@@ -256,6 +258,13 @@ public class EvoAssistClient implements ClientModInitializer {
             wBosses.applyPos();
         }
         wBosses.setScale(HudConfig.BossScale);
+        if (wBossTokens == null) wBossTokens = new WiBossTokens(HudConfig.BossTokensX, HudConfig.BossTokensY, null);
+        else {
+            wBossTokens.setX(HudConfig.BossTokensX);
+            wBossTokens.setY(HudConfig.BossTokensY);
+            wBossTokens.applyPos();
+        }
+        wBossTokens.setScale(HudConfig.BossTokensScale);
         if (wClan == null) wClan = new WiRewards(true, HudConfig.ClanX, HudConfig.ClanY, null);
         else {
             wClan.setX(HudConfig.ClanX);
@@ -273,7 +282,7 @@ public class EvoAssistClient implements ClientModInitializer {
         }
 
         hudWidgets.clear();
-        hudWidgets.addAll(List.of(wBlockProfitPH, wBlockGoal, wTimeGoal, wGoalNotice, wBosses, wClan));
+        hudWidgets.addAll(List.of(wBlockProfitPH, wBlockGoal, wTimeGoal, wGoalNotice, wBosses, wBossTokens, wClan));
         hudWidgets.addAll(additionalGoalWidgets.values());
 
     }

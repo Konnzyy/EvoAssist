@@ -8,7 +8,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class RewardMessageParser {
-    public enum Type { MONEY, SHARDS, TOKENS, CLAN_POINTS, CLAN_EXPERIENCE, CLAN_GOLD }
+    public enum Type { MONEY, SHARDS, TOKENS, INFERNAL_TOKENS, END_TOKENS, CLAN_POINTS, CLAN_EXPERIENCE, CLAN_GOLD }
     public record Reward(Type type, BigDecimal amount) {}
     private static final Pattern LINE = Pattern.compile(
             "^(\\+)?\\s*(\\d+(?:[ \\u00a0\\u202f]\\d{3})*(?:[.,]\\d+)?)([KMBTQ]?)\\s*(.*?)\\s*$",
@@ -29,7 +29,9 @@ public final class RewardMessageParser {
         if (label.matches("очк(?:о|а|ов) клана")) type = Type.CLAN_POINTS;
         else if (label.matches("опыт(?:а)? клана")) type = Type.CLAN_EXPERIENCE;
         else if (label.matches("золот(?:о|а) клана")) type = Type.CLAN_GOLD;
-        else if (label.matches("жетон(?:а|ов)?")) type = Type.TOKENS;
+        else if (label.matches("адск(?:ий|их|ие) жетон(?:а|ов|ы)?")) type = Type.INFERNAL_TOKENS;
+        else if (label.matches("энд жетон(?:а|ов|ы)?")) type = Type.END_TOKENS;
+        else if (label.matches("жетон(?:а|ов|ы)?")) type = Type.TOKENS;
         else if (label.matches("шард(?:а|ов|ы)?") || label.equals("\uE365")) type = Type.SHARDS;
         else if (label.equals("\uE135") || label.equals("$") || label.matches("ден(?:ьги|ег)")
                 || label.isEmpty()) type = Type.MONEY;

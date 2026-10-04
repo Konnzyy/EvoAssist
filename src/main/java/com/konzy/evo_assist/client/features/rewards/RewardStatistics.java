@@ -19,7 +19,7 @@ import java.util.function.Consumer;
 public final class RewardStatistics {
     public static final class Totals {
         public BigDecimal money = BigDecimal.ZERO;
-        public long shards, tokens, clanPoints, clanExperience, clanGold;
+        public long shards, tokens, infernalTokens, endTokens, clanPoints, clanExperience, clanGold;
     }
 
     private final Path file;
@@ -45,9 +45,19 @@ public final class RewardStatistics {
     public boolean hasServer() { return !currentServer.isEmpty(); }
     public boolean isConnected() { return connected; }
     public boolean hasBossStatistics() {
+        return hasBossRewardStatistics() || hasBossTokenStatistics();
+    }
+
+    public boolean hasBossRewardStatistics() {
         if (!hasServer()) return false;
         Totals totals = current();
-        return totals.money.signum() != 0 || totals.shards != 0 || totals.tokens != 0;
+        return totals.money.signum() != 0 || totals.shards != 0;
+    }
+
+    public boolean hasBossTokenStatistics() {
+        if (!hasServer()) return false;
+        Totals totals = current();
+        return totals.tokens != 0 || totals.infernalTokens != 0 || totals.endTokens != 0;
     }
 
     public boolean hasClanStatistics() {
@@ -82,6 +92,8 @@ public final class RewardStatistics {
                     case MONEY -> totals.money = totals.money.add(value.amount());
                     case SHARDS -> totals.shards = Math.addExact(totals.shards, value.amount().longValueExact());
                     case TOKENS -> totals.tokens = Math.addExact(totals.tokens, value.amount().longValueExact());
+                    case INFERNAL_TOKENS -> totals.infernalTokens = Math.addExact(totals.infernalTokens, value.amount().longValueExact());
+                    case END_TOKENS -> totals.endTokens = Math.addExact(totals.endTokens, value.amount().longValueExact());
                     case CLAN_POINTS -> totals.clanPoints = Math.addExact(totals.clanPoints, value.amount().longValueExact());
                     case CLAN_EXPERIENCE -> totals.clanExperience = Math.addExact(totals.clanExperience, value.amount().longValueExact());
                     case CLAN_GOLD -> totals.clanGold = Math.addExact(totals.clanGold, value.amount().longValueExact());
@@ -96,11 +108,24 @@ public final class RewardStatistics {
     }
 
     public void resetBosses() {
+        resetBossRewards();
+        resetBossTokens();
+    }
+
+    public void resetBossRewards() {
         if (!hasServer()) return;
         Totals totals = current();
         totals.money = BigDecimal.ZERO;
         totals.shards = 0;
+        save();
+    }
+
+    public void resetBossTokens() {
+        if (!hasServer()) return;
+        Totals totals = current();
         totals.tokens = 0;
+        totals.infernalTokens = 0;
+        totals.endTokens = 0;
         save();
     }
 
@@ -125,6 +150,8 @@ public final class RewardStatistics {
             values.setProperty(prefix + "money", totals.money.toPlainString());
             values.setProperty(prefix + "shards", Long.toString(totals.shards));
             values.setProperty(prefix + "tokens", Long.toString(totals.tokens));
+            values.setProperty(prefix + "infernalTokens", Long.toString(totals.infernalTokens));
+            values.setProperty(prefix + "endTokens", Long.toString(totals.endTokens));
             values.setProperty(prefix + "clanPoints", Long.toString(totals.clanPoints));
             values.setProperty(prefix + "clanExperience", Long.toString(totals.clanExperience));
             values.setProperty(prefix + "clanGold", Long.toString(totals.clanGold));
@@ -159,6 +186,8 @@ public final class RewardStatistics {
                     totals.money = new BigDecimal(values.getProperty(prefix + "money", "0")).max(BigDecimal.ZERO);
                     totals.shards = nonnegative(values, prefix + "shards");
                     totals.tokens = nonnegative(values, prefix + "tokens");
+                    totals.infernalTokens = nonnegative(values, prefix + "infernalTokens");
+                    totals.endTokens = nonnegative(values, prefix + "endTokens");
                     totals.clanPoints = nonnegative(values, prefix + "clanPoints");
                     totals.clanExperience = nonnegative(values, prefix + "clanExperience");
                     totals.clanGold = nonnegative(values, prefix + "clanGold");

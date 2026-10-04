@@ -7,4 +7,7 @@ import com.teamresourceful.resourcefulconfig.api.annotations.ConfigEntry;
 public class ConfigBosses {
     @ConfigEntry(id = "bossWidgetEnabled", translation = "evoassist.ui.bossWidget.title")
     public static boolean widgetEnabled = false;
+
+    @ConfigEntry(id = "bossTokensWidgetEnabled", translation = "evoassist.ui.bossTokensWidget.title")
+    public static boolean tokensWidgetEnabled = false;
 }
