@@ -18,6 +18,7 @@ import com.konzy.evo_assist.client.ui.widgets.WiBlockProfitPH;
 import com.konzy.evo_assist.client.ui.widgets.WiMiningGoal;
 import com.konzy.evo_assist.client.ui.widgets.WiGoalNotice;
 import com.konzy.evo_assist.client.ui.widgets.WiRewards;
+import com.konzy.evo_assist.client.ui.widgets.WiBossTokens;
 import com.konzy.evo_assist.client.ui.widgets.WiAdditionalGoal;
 import com.konzy.evo_assist.client.ui.widgets.WiChatTabs;
 import com.konzy.evo_assist.client.features.goals.AdditionalGoals;
@@ -40,6 +41,7 @@ public class WidgetScreen extends Screen {
     private WiMiningGoal wiTimeGoal;
     private WiGoalNotice wiGoalNotice;
     private WiRewards wiBosses;
+    private WiBossTokens wiBossTokens;
     private WiRewards wiClan;
     private WiChatTabs wiChatTabs;
     private final List<WiAdditionalGoal> additionalGoals = new ArrayList<>();
@@ -83,6 +85,7 @@ public class WidgetScreen extends Screen {
         wiTimeGoal = null;
         wiGoalNotice = null;
         wiBosses = null;
+        wiBossTokens = null;
         wiClan = null;
         wiChatTabs = null;
         additionalGoals.clear();
@@ -119,6 +122,10 @@ public class WidgetScreen extends Screen {
         if (ConfigBosses.widgetEnabled && (focus == Focus.ALL || focus == Focus.BOSSES)) {
             wiBosses = new WiRewards(false, HudConfig.BossX, HudConfig.BossY, this);
             this.addRenderableWidget(wiBosses);
+        }
+        if (ConfigBosses.tokensWidgetEnabled && (focus == Focus.ALL || focus == Focus.BOSSES)) {
+            wiBossTokens = new WiBossTokens(HudConfig.BossTokensX, HudConfig.BossTokensY, this);
+            this.addRenderableWidget(wiBossTokens);
         }
         if (ConfigClan.widgetEnabled && (focus == Focus.ALL || focus == Focus.CLAN)) {
             wiClan = new WiRewards(true, HudConfig.ClanX, HudConfig.ClanY, this);
@@ -160,6 +167,7 @@ public class WidgetScreen extends Screen {
             wiGoalNotice.savePosition();
         }
         if (wiBosses != null) wiBosses.savePosition();
+        if (wiBossTokens != null) wiBossTokens.savePosition();
         if (wiClan != null) wiClan.savePosition();
         if (wiChatTabs != null) wiChatTabs.savePosition();
         additionalGoals.forEach(WiAdditionalGoal::savePosition);

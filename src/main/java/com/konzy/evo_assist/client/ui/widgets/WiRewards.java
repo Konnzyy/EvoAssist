@@ -18,7 +18,7 @@ public final class WiRewards extends WWidget {
     private final boolean clan;
 
     public WiRewards(boolean clan, int x, int y, WidgetScreen editor) {
-        super(x, y, 230, 31, editor, clan ? HudConfig.ClanScale : HudConfig.BossScale);
+        super(x, y, 230, clan ? 31 : 24, editor, clan ? HudConfig.ClanScale : HudConfig.BossScale);
         this.clan = clan;
     }
 
@@ -33,12 +33,12 @@ public final class WiRewards extends WWidget {
         if (contextBuilder == null) {
             Identifier icon = Identifier.fromNamespaceAndPath("minecraft",
                     clan ? "textures/item/gold_ingot.png" : "textures/item/netherite_sword.png");
-            contextBuilder = new ContextBuilder.Builder()
-                    .addTexture(icon, 0, 0, true, width, height, 24).setPadding(10)
+            var builder = new ContextBuilder.Builder()
+                    .addTexture(icon, 0, 0, true, width, height, clan ? 24 : 20).setPadding(10)
                     .addLine(Component.empty(), 0xFFFFFFFF, 26, 1, true)
-                    .addLine(Component.empty(), 0xFFFFFFFF, 26, 1, true)
-                    .addLine(Component.empty(), 0xFFFFFFFF, 26, 1, true)
-                    .setX(getX()).setY(getY()).setWidth(width).setHeight(height).build();
+                    .addLine(Component.empty(), 0xFFFFFFFF, 26, 1, true);
+            if (clan) builder.addLine(Component.empty(), 0xFFFFFFFF, 26, 1, true);
+            contextBuilder = builder.setX(getX()).setY(getY()).setWidth(width).setHeight(height).build();
         }
         var totals = EvoAssistClient.rewardStatistics.current();
         if (clan) {
@@ -48,7 +48,6 @@ public final class WiRewards extends WWidget {
         } else {
             updateLine(0, Component.literal(tr("evoassist.hud.money") + "§a" + RewardMessageParser.compactMoney(totals.money) + "§f\uE135"));
             updateLine(1, Component.literal(tr("evoassist.hud.shards") + "§d" + RewardMessageParser.whole(totals.shards) + "§f\uE365"));
-            updateLine(2, Component.literal(tr("evoassist.hud.tokens") + "§e" + RewardMessageParser.whole(totals.tokens)));
         }
         super.extractWidgetRenderState(graphics, mouseX, mouseY, delta);
     }

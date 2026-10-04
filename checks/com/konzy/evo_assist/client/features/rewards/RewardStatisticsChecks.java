@@ -19,6 +19,14 @@ public final class RewardStatisticsChecks {
         parsed("§7+ 3.64B(84% бонус)", MONEY, "3640000000");
         parsed("+ 48 \uE365", SHARDS, "48");
         parsed("+ 1 жетон", TOKENS, "1");
+        parsed("+ 2 жетона", TOKENS, "2");
+        parsed("+ 3 жетонов", TOKENS, "3");
+        parsed("+ 1 адский жетон", INFERNAL_TOKENS, "1");
+        parsed("+ 3 адских жетона", INFERNAL_TOKENS, "3");
+        parsed("+ 4 адских жетонов", INFERNAL_TOKENS, "4");
+        parsed("+ 1 энд жетон", END_TOKENS, "1");
+        parsed("+ 2 энд жетона", END_TOKENS, "2");
+        parsed("+ 5 энд жетонов", END_TOKENS, "5");
         parsed("+ 38 очков клана", CLAN_POINTS, "38");
         parsed("+ 4 опыта клана", CLAN_EXPERIENCE, "4");
         parsed("+ 5 золота клана(37% Бонус)", CLAN_GOLD, "5");
@@ -32,7 +40,8 @@ public final class RewardStatisticsChecks {
         parsed("+\u00a01\u202f234 очка клана", CLAN_POINTS, "1234");
         parsed("+ 2,15M", MONEY, "2150000");
         for (String text : new String[]{"Игрок: + 3.64B", "+ 1 меч", "- 5 золота клана", "6 очков клана", "250",
-                "+ 1.5 жетона", "+ 5K очков клана", "Награды за босса", "+ 5 опыта персонажа"}) {
+                "+ 1.5 жетона", "+ 5K очков клана", "Награды за босса", "+ 5 опыта персонажа",
+                "+ 1 алмазный жетон", "1 адский жетон"}) {
             check(RewardMessageParser.parse(text).isEmpty(), "Reject " + text);
         }
         check(RewardMessageParser.compactMoney(new BigDecimal("5230000000000000")).equals("5.23Q"), "Q formatting");
@@ -45,30 +54,43 @@ public final class RewardStatisticsChecks {
         check(!stats.hasBossStatistics() && !stats.hasClanStatistics(), "No reset data without a server");
         stats.connect("PLAY.EXAMPLE.COM:25565");
         check(!stats.hasBossStatistics() && !stats.hasClanStatistics(), "Empty server has no reset data");
-        stats.receive("+ 3.64B(84% бонус)\n+ 48 \uE365\n+ 1 жетон\n+ 38 очков клана\n+ 4 опыта клана\n+ 5 золота клана(37% бонус)");
+        stats.receive("+ 3.64B(84% бонус)\n+ 48 \uE365\n+ 1 жетон\n+ 3 адских жетона\n+ 5 энд жетонов\n+ 38 очков клана\n+ 4 опыта клана\n+ 5 золота клана(37% бонус)");
         check(stats.current().money.compareTo(new BigDecimal("3640000000")) == 0
                 && stats.current().shards == 48 && stats.current().tokens == 1
+                && stats.current().infernalTokens == 3 && stats.current().endTokens == 5
                 && stats.current().clanPoints == 38 && stats.current().clanExperience == 4
                 && stats.current().clanGold == 5, "full screenshot batch");
         stats.receive("6 золота клана\n3 опыта клана");
         check(stats.current().clanGold == 11 && stats.current().clanExperience == 7,
                 "Separate clan rewards without plus are accumulated");
-        check(stats.hasBossStatistics() && stats.hasClanStatistics(), "Rewards enable both resets");
+        check(stats.hasBossRewardStatistics() && stats.hasBossTokenStatistics() && stats.hasClanStatistics(), "Rewards enable each reset");
         stats.disconnect();
         stats.receive("+ 100Q");
         stats = new RewardStatistics(file, error -> { throw new AssertionError(error); });
-        check(stats.current().money.compareTo(new BigDecimal("3640000000")) == 0, "saved on restart, disconnected messages ignored");
+        check(stats.current().money.compareTo(new BigDecimal("3640000000")) == 0
+                && stats.current().infernalTokens == 3 && stats.current().endTokens == 5,
+                "saved on restart, disconnected messages ignored");
         stats.connect("other.example.com");
         check(!stats.hasBossStatistics() && !stats.hasClanStatistics(), "Reset availability follows selected server");
-        check(stats.current().tokens == 0 && stats.current().clanPoints == 0, "separate server");
-        stats.receive("+ 2 жетона");
-        check(stats.hasBossStatistics() && !stats.hasClanStatistics(), "Tokens alone enable only boss reset");
+        check(stats.current().tokens == 0 && stats.current().infernalTokens == 0
+                && stats.current().endTokens == 0 && stats.current().clanPoints == 0, "separate server");
+        stats.receive("+ 2 жетона\n+ 4 адских жетона\n+ 5 энд жетонов");
+        check(!stats.hasBossRewardStatistics() && stats.hasBossTokenStatistics() && !stats.hasClanStatistics(),
+                "Tokens alone enable only token reset");
         stats.connect("play.example.com");
-        check(stats.current().tokens == 1 && stats.current().clanGold == 11, "restore original server and default port normalization");
-        stats.resetBosses();
-        check(!stats.hasBossStatistics() && stats.hasClanStatistics(), "Boss reset disables only its own button");
+        check(stats.current().tokens == 1 && stats.current().infernalTokens == 3
+                && stats.current().endTokens == 5 && stats.current().clanGold == 11,
+                "restore original server and default port normalization");
+        stats.resetBossRewards();
+        check(!stats.hasBossRewardStatistics() && stats.hasBossTokenStatistics(), "Reward reset preserves tokens");
         check(stats.current().money.signum() == 0 && stats.current().shards == 0
-                && stats.current().tokens == 0 && stats.current().clanPoints == 38, "independent boss reset");
+                && stats.current().tokens == 1 && stats.current().infernalTokens == 3,
+                "independent boss reward reset");
+        stats.resetBossTokens();
+        check(!stats.hasBossStatistics() && stats.hasClanStatistics(), "Token reset disables only its own button");
+        check(stats.current().money.signum() == 0 && stats.current().shards == 0
+                && stats.current().tokens == 0 && stats.current().infernalTokens == 0
+                && stats.current().endTokens == 0 && stats.current().clanPoints == 38, "independent token reset");
         stats.receive("+ 1K");
         stats.resetClan();
         stats = new RewardStatistics(file, error -> { throw new AssertionError(error); });
@@ -76,7 +98,8 @@ public final class RewardStatisticsChecks {
                 && stats.current().clanGold == 0 && stats.current().money.compareTo(new BigDecimal("1000")) == 0, "independent clan reset persists");
         check(stats.hasBossStatistics() && !stats.hasClanStatistics(), "Reset availability restored from saved data");
         stats.connect("other.example.com");
-        check(stats.current().tokens == 2, "other server survives resets");
+        check(stats.current().tokens == 2 && stats.current().infernalTokens == 4
+                && stats.current().endTokens == 5, "other server survives resets");
         Files.delete(file);
         System.out.println("Reward statistics checks passed: " + checks);
     }

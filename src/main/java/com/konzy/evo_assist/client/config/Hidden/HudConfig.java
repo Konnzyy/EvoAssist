@@ -28,6 +28,18 @@ public class HudConfig {
     public static double BossScale = 1;
 
     @ConfigOption.Hidden
+    @ConfigEntry(id = "bossTokensWidgetX", translation = "boss tokens widget X")
+    public static int BossTokensX = 245;
+
+    @ConfigOption.Hidden
+    @ConfigEntry(id = "bossTokensWidgetY", translation = "boss tokens widget Y")
+    public static int BossTokensY = 248;
+
+    @ConfigOption.Hidden
+    @ConfigEntry(id = "bossTokensWidgetScale", translation = "boss tokens widget scale")
+    public static double BossTokensScale = 1;
+
+    @ConfigOption.Hidden
     @ConfigEntry(id = "clanWidgetX", translation = "clan widget X")
     public static int ClanX = 0;
 

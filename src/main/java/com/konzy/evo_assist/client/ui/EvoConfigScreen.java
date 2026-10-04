@@ -173,9 +173,14 @@ public class EvoConfigScreen extends Screen {
                 items.add(Row.action("resetGoals", tr("evoassist.ui.resetGoals.title"), tr("evoassist.ui.resetGoals.hint")));
             }
             case BOSSES -> {
+                items.add(Row.section(tr("evoassist.section.bossRewards")));
                 items.add(Row.toggle("bossWidget", tr("evoassist.ui.bossWidget.title"), tr("evoassist.ui.bossWidget.hint")));
-                items.add(Row.action("resetBosses", tr("evoassist.ui.resetRewards.title"), tr("evoassist.ui.resetBosses.hint")));
+                items.add(Row.action("resetBossRewards", tr("evoassist.ui.resetRewards.title"), tr("evoassist.ui.resetBossRewards.hint")));
                 items.add(Row.editor("editBosses", tr("evoassist.ui.editor.title"), tr("evoassist.ui.editor.hint")));
+                items.add(Row.section(tr("evoassist.section.bossTokens")));
+                items.add(Row.toggle("bossTokensWidget", tr("evoassist.ui.bossTokensWidget.title"), tr("evoassist.ui.bossTokensWidget.hint")));
+                items.add(Row.action("resetBossTokens", tr("evoassist.ui.resetRewards.title"), tr("evoassist.ui.resetBossTokens.hint")));
+                items.add(Row.editor("editBossTokens", tr("evoassist.ui.editor.title"), tr("evoassist.ui.editor.hint")));
             }
             case CLAN -> {
                 items.add(Row.toggle("clanWidget", tr("evoassist.ui.clanWidget.title"), tr("evoassist.ui.clanWidget.hint")));
@@ -599,7 +604,8 @@ public class EvoConfigScreen extends Screen {
             case "resetMining" -> "evoassist.ui.resetMining.description";
             case "resetGoals" -> "evoassist.ui.resetGoals.description";
             case "resetClanGoals" -> "evoassist.ui.resetClanGoals.description";
-            case "resetBosses" -> "evoassist.ui.resetBosses.description";
+            case "resetBossRewards" -> "evoassist.ui.resetBossRewards.description";
+            case "resetBossTokens" -> "evoassist.ui.resetBossTokens.description";
             case "resetClan" -> "evoassist.ui.resetClan.description";
                 default -> isGoal(pendingResetId) ? "evoassist.ui.goalChangeWarning" : "";
             };
@@ -649,12 +655,15 @@ public class EvoConfigScreen extends Screen {
                 lines.add(tr("evoassist.hud.money") + GoalAmount.format(BigDecimal.valueOf(counter.totalMoney)));
                 lines.add(tr("evoassist.hud.shards") + RewardMessageParser.whole(counter.totalShards));
             }
-            case "resetBosses", "resetClan" -> {
+            case "resetBossRewards", "resetBossTokens", "resetClan" -> {
                 var totals = EvoAssistClient.rewardStatistics.current();
-                if (id.equals("resetBosses")) {
+                if (id.equals("resetBossRewards")) {
                     lines.add(tr("evoassist.hud.money") + GoalAmount.format(totals.money));
                     lines.add(tr("evoassist.hud.shards") + RewardMessageParser.whole(totals.shards));
-                    lines.add(tr("evoassist.hud.tokens") + RewardMessageParser.whole(totals.tokens));
+                } else if (id.equals("resetBossTokens")) {
+                    lines.add(tr("evoassist.hud.ordinaryTokens") + RewardMessageParser.whole(totals.tokens));
+                    lines.add(tr("evoassist.hud.infernalTokens") + RewardMessageParser.whole(totals.infernalTokens));
+                    lines.add(tr("evoassist.hud.endTokens") + RewardMessageParser.whole(totals.endTokens));
                 } else {
                     lines.add(tr("evoassist.hud.clanPoints") + RewardMessageParser.whole(totals.clanPoints));
                     lines.add(tr("evoassist.hud.clanGold") + RewardMessageParser.whole(totals.clanGold));
@@ -714,7 +723,8 @@ public class EvoConfigScreen extends Screen {
             case "resetMining" -> tr("evoassist.ui.resetMining.subject");
             case "resetGoals" -> tr("evoassist.ui.resetGoals.subject");
             case "resetClanGoals" -> tr("evoassist.ui.resetClanGoals.subject");
-            case "resetBosses" -> tr("evoassist.ui.resetBosses.subject");
+            case "resetBossRewards" -> tr("evoassist.ui.resetBossRewards.subject");
+            case "resetBossTokens" -> tr("evoassist.ui.resetBossTokens.subject");
             case "resetClan" -> tr("evoassist.ui.resetClan.subject");
             default -> rows().stream().filter(row -> row.id.equals(subjectId))
                     .map(row -> row.title).findFirst().orElse(tr("evoassist.ui.setting"));
@@ -773,7 +783,8 @@ public class EvoConfigScreen extends Screen {
             }
             case "resetGoals" -> MiningGoals.getInstance().hasProgress() || AdditionalGoals.getInstance().hasProgress(false);
             case "resetClanGoals" -> AdditionalGoals.getInstance().hasProgress(true);
-            case "resetBosses" -> EvoAssistClient.rewardStatistics != null && EvoAssistClient.rewardStatistics.hasBossStatistics();
+            case "resetBossRewards" -> EvoAssistClient.rewardStatistics != null && EvoAssistClient.rewardStatistics.hasBossRewardStatistics();
+            case "resetBossTokens" -> EvoAssistClient.rewardStatistics != null && EvoAssistClient.rewardStatistics.hasBossTokenStatistics();
             case "resetClan" -> EvoAssistClient.rewardStatistics != null && EvoAssistClient.rewardStatistics.hasClanStatistics();
             default -> true;
         };
@@ -808,7 +819,7 @@ public class EvoConfigScreen extends Screen {
                 feedbackUntil = System.currentTimeMillis() + 2500;
                 startResetFlash(id);
             }
-            case "resetBosses", "resetClan" -> resetRewards(id);
+            case "resetBossRewards", "resetBossTokens", "resetClan" -> resetRewards(id);
             default -> resetValue(id);
         }
     }
@@ -827,6 +838,7 @@ public class EvoConfigScreen extends Screen {
             case "editShardGoal" -> "shardGoalWidget";
             case "editGoalNotice" -> "goalNotifications";
             case "editBosses" -> "bossWidget";
+            case "editBossTokens" -> "bossTokensWidget";
             case "editClan" -> "clanWidget";
             case "editClanPointsGoal" -> "clanPointsGoalWidget";
             case "editClanGoldGoal" -> "clanGoldGoalWidget";
@@ -851,6 +863,7 @@ public class EvoConfigScreen extends Screen {
             case "clanGoalNotifications" -> ConfigClan.goalNotifications;
             case "goalNotifications" -> ConfigMining.goalNotifications;
             case "bossWidget" -> ConfigBosses.widgetEnabled;
+            case "bossTokensWidget" -> ConfigBosses.tokensWidgetEnabled;
             case "clanWidget" -> ConfigClan.widgetEnabled;
             case "chatTabs" -> ConfigChat.chatTabsToggle;
             default -> false;
@@ -951,6 +964,7 @@ public class EvoConfigScreen extends Screen {
             case "clanGoalNotifications" -> ConfigClan.goalNotifications = !ConfigClan.goalNotifications;
             case "goalNotifications" -> ConfigMining.goalNotifications = !ConfigMining.goalNotifications;
             case "bossWidget" -> ConfigBosses.widgetEnabled = !ConfigBosses.widgetEnabled;
+            case "bossTokensWidget" -> ConfigBosses.tokensWidgetEnabled = !ConfigBosses.tokensWidgetEnabled;
             case "clanWidget" -> ConfigClan.widgetEnabled = !ConfigClan.widgetEnabled;
             case "chatTabs" -> {
                 ConfigChat.chatTabsToggle = !ConfigChat.chatTabsToggle;
@@ -1011,8 +1025,12 @@ public class EvoConfigScreen extends Screen {
         if (!EvoAssistClient.rewardStatistics.hasServer()) {
             feedback = tr("evoassist.ui.connectFirst");
         } else {
-            if (id.equals("resetBosses")) EvoAssistClient.rewardStatistics.resetBosses();
-            else EvoAssistClient.rewardStatistics.resetClan();
+            switch (id) {
+                case "resetBossRewards" -> EvoAssistClient.rewardStatistics.resetBossRewards();
+                case "resetBossTokens" -> EvoAssistClient.rewardStatistics.resetBossTokens();
+                case "resetClan" -> EvoAssistClient.rewardStatistics.resetClan();
+                default -> throw new IllegalArgumentException(id);
+            }
             feedback = tr("evoassist.ui.statisticsReset");
             startResetFlash(id);
         }
