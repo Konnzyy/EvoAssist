@@ -4,7 +4,7 @@
   "version": "${version}",
   "name": "EvoAssist",
   "description": "Client-side QoL tools for DiamondWorld Prison Evo.",
-  "authors": ["Konnzy"],
+  "authors": ["Konnzyy"],
   "contact": {},
   "license": ["MIT", "Apache-2.0"],
   "icon": "assets/evoassist/icon.png",

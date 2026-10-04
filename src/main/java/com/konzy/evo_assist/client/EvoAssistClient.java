@@ -131,11 +131,11 @@ public class EvoAssistClient implements ClientModInitializer {
             }
         });
         ClientPlayConnectionEvents.DISCONNECT.register((_, _) -> {
+            eventBlockProfitPerHour.disconnect();
             rewardStatistics.disconnect();
             AdditionalGoals.getInstance().disconnect();
             MiningGoals.getInstance().expirePendingPrices();
             MiningGoals.getInstance().save();
-            eventBlockProfitPerHour.disconnect();
         });
 
         // Commands
@@ -206,6 +206,7 @@ public class EvoAssistClient implements ClientModInitializer {
         });
 
         HudElementRegistry.attachElementBefore(VanillaHudElements.CROSSHAIR, WIDGET_LAYER, (context, tickCounter) -> {
+            if (instance.gui.screen() instanceof WidgetScreen) return;
             float tickDelta = tickCounter.getGameTimeDeltaPartialTick(false);
             for (WWidget widget : hudWidgets) {
                 widget.extractRenderState(context, 0, 0, tickDelta);

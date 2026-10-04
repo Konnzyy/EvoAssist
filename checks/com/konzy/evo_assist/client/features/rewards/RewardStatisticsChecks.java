@@ -22,6 +22,8 @@ public final class RewardStatisticsChecks {
         parsed("+ 38 очков клана", CLAN_POINTS, "38");
         parsed("+ 4 опыта клана", CLAN_EXPERIENCE, "4");
         parsed("+ 5 золота клана(37% Бонус)", CLAN_GOLD, "5");
+        parsed("6 золота клана", CLAN_GOLD, "6");
+        parsed("3 опыта клана", CLAN_EXPERIENCE, "3");
         parsed("+ 2.15M", MONEY, "2150000");
         parsed("+ 4.43T", MONEY, "4430000000000");
         parsed("+ 5.23Q", MONEY, "5230000000000000");
@@ -29,7 +31,7 @@ public final class RewardStatisticsChecks {
         parsed("+ 250", MONEY, "250");
         parsed("+\u00a01\u202f234 очка клана", CLAN_POINTS, "1234");
         parsed("+ 2,15M", MONEY, "2150000");
-        for (String text : new String[]{"Игрок: + 3.64B", "+ 1 меч", "- 5 золота клана",
+        for (String text : new String[]{"Игрок: + 3.64B", "+ 1 меч", "- 5 золота клана", "6 очков клана", "250",
                 "+ 1.5 жетона", "+ 5K очков клана", "Награды за босса", "+ 5 опыта персонажа"}) {
             check(RewardMessageParser.parse(text).isEmpty(), "Reject " + text);
         }
@@ -48,6 +50,9 @@ public final class RewardStatisticsChecks {
                 && stats.current().shards == 48 && stats.current().tokens == 1
                 && stats.current().clanPoints == 38 && stats.current().clanExperience == 4
                 && stats.current().clanGold == 5, "full screenshot batch");
+        stats.receive("6 золота клана\n3 опыта клана");
+        check(stats.current().clanGold == 11 && stats.current().clanExperience == 7,
+                "Separate clan rewards without plus are accumulated");
         check(stats.hasBossStatistics() && stats.hasClanStatistics(), "Rewards enable both resets");
         stats.disconnect();
         stats.receive("+ 100Q");
@@ -59,7 +64,7 @@ public final class RewardStatisticsChecks {
         stats.receive("+ 2 жетона");
         check(stats.hasBossStatistics() && !stats.hasClanStatistics(), "Tokens alone enable only boss reset");
         stats.connect("play.example.com");
-        check(stats.current().tokens == 1 && stats.current().clanGold == 5, "restore original server and default port normalization");
+        check(stats.current().tokens == 1 && stats.current().clanGold == 11, "restore original server and default port normalization");
         stats.resetBosses();
         check(!stats.hasBossStatistics() && stats.hasClanStatistics(), "Boss reset disables only its own button");
         check(stats.current().money.signum() == 0 && stats.current().shards == 0
