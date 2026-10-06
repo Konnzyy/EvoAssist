@@ -11,15 +11,16 @@ import com.teamresourceful.resourcefulconfig.api.annotations.ConfigOption;
 
 @Category("Чат")
 public class ConfigChat {
-    @ConfigOption.Separator(
-            value = "§bВкладки чатов",
-            description = "Виджет вкладок чата; Shift+ЛКМ — скрыть сообщения вкладки"
-    )
+    // Retained for old config compatibility; EvoPlus owns visibility.
+    @ConfigOption.Hidden
     @ConfigEntry(
             id = "chatTabsToggle",
             translation = "evoassist.ui.chatTabs.title"
     )
     public static boolean chatTabsToggle = true;
+    @ConfigOption.Hidden
+    @ConfigEntry(id = "chatWidgetMigratedToEvoPlus")
+    public static boolean chatWidgetMigratedToEvoPlus = false;
     @ConfigEntry(id = "chatTabsOrientation", translation = "evoassist.ui.chatOrientation.title")
     public static Orientation chatTabsOrientation = Orientation.HORIZONTAL;
 

@@ -6,13 +6,14 @@ package com.konzy.evo_assist.client.mixin;
 
 import com.konzy.evo_assist.client.chat.ChatPrefix;
 import com.konzy.evo_assist.client.chat.ChatTabManager;
-import com.konzy.evo_assist.client.config.ConfigChat;
-import com.konzy.evo_assist.client.ui.widgets.WiChatTabs;
+import com.konzy.evo_assist.client.compat.evoplus.EvoPlusIntegration;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+import net.minecraft.client.input.MouseButtonEvent;
 
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.ChatScreen;
@@ -29,9 +30,9 @@ public abstract class ChatScreenMixin extends Screen {
 
     @Inject(method = "init", at = @At("RETURN"))
     private void onInit(CallbackInfo ci) {
-        if(!ConfigChat.chatTabsToggle) return;
+        EvoPlusIntegration.invalidateChatHitArea();
+        if(!EvoPlusIntegration.chatTabsEnabled()) return;
         ChatTabManager manager = ChatTabManager.getInstance();
-        addRenderableWidget(new WiChatTabs(null, prefix -> input.setValue(prefix.getPrefix())));
         ChatPrefix prefix = manager.getCurrentPrefix();
 
         if (input.getValue().isEmpty() && prefix != ChatPrefix.NONE) {
@@ -39,9 +40,19 @@ public abstract class ChatScreenMixin extends Screen {
         }
     }
 
+    @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
+    private void evoassist$clickChatTab(MouseButtonEvent event, boolean doubleClick, CallbackInfoReturnable<Boolean> cir) {
+        if (EvoPlusIntegration.clickChatTabs((ChatScreen) (Object) this, event,
+                prefix -> input.setValue(prefix.getPrefix()))) {
+            setFocused(input);
+            input.setFocused(true);
+            cir.setReturnValue(true);
+        }
+    }
+
     @Inject(method = "handleChatInput", at = @At("HEAD"), cancellable = true)
     private void onSendMessage(String msg, boolean addToRecent, CallbackInfo ci) {
-        if(!ConfigChat.chatTabsToggle) return;
+        if(!EvoPlusIntegration.chatTabsEnabled()) return;
         ChatPrefix prefix = ChatTabManager.getInstance().getCurrentPrefix();
         if (prefix != ChatPrefix.NONE) {
             String prefixStr = prefix.getPrefix();

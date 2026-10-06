@@ -11,10 +11,7 @@ import com.teamresourceful.resourcefulconfig.api.annotations.*;
 @Category("Шахта")
 public class ConfigMining {
 
-    @ConfigOption.Separator(
-            value = "§bСчетчик денег в час",
-            description = "Считает примерное количество блоков/денег в час"
-    )
+    @ConfigOption.Hidden
     @ConfigEntry(
             id = "bphWidgetToggle",
             translation = "evoassist.ui.miningWidget.title"
@@ -60,9 +57,11 @@ public class ConfigMining {
     @ConfigEntry(id = "timeGoalMinutes", translation = "evoassist.ui.timeGoal.title")
     public static int timeGoalMinutes = 0;
 
+    @ConfigOption.Hidden
     @ConfigEntry(id = "blockGoalWidgetEnabled", translation = "evoassist.ui.blockGoalWidget.title")
     public static boolean blockGoalWidgetEnabled = true;
 
+    @ConfigOption.Hidden
     @ConfigEntry(id = "timeGoalWidgetEnabled", translation = "evoassist.ui.timeGoalWidget.title")
     public static boolean timeGoalWidgetEnabled = true;
 
@@ -70,8 +69,10 @@ public class ConfigMining {
     public static String moneyGoalTarget = "0";
     @ConfigEntry(id = "shardGoalTarget", translation = "evoassist.ui.shardGoal.title")
     public static String shardGoalTarget = "0";
+    @ConfigOption.Hidden
     @ConfigEntry(id = "moneyGoalWidgetEnabled", translation = "evoassist.ui.moneyGoalWidget.title")
     public static boolean moneyGoalWidgetEnabled = true;
+    @ConfigOption.Hidden
     @ConfigEntry(id = "shardGoalWidgetEnabled", translation = "evoassist.ui.shardGoalWidget.title")
     public static boolean shardGoalWidgetEnabled = true;
 
