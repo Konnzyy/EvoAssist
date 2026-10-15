@@ -15,6 +15,7 @@ public class ConfigVisual {
     @ConfigEntry(id = "widgetsInitializedForEvoPlus")
     public static boolean widgetsInitializedForEvoPlus = false;
 
+    @ConfigOption.Hidden
     @ConfigOption.Range(min = 10, max = 100)
     @ConfigOption.Slider
     @ConfigEntry(

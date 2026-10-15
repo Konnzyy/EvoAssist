@@ -6,16 +6,16 @@ package com.konzy.evo_assist.client.config;
 
 import com.konzy.evo_assist.client.EvoAssistClient;
 import com.konzy.evo_assist.client.config.Hidden.HudConfig;
-import com.konzy.evo_assist.client.ui.EvoConfigScreen;
+import com.konzy.evo_assist.client.compat.evoplus.EvoPlusIntegration;
 import com.teamresourceful.resourcefulconfig.api.annotations.*;
 
 @com.teamresourceful.resourcefulconfig.api.annotations.Config(
         value = EvoAssistClient.MODID,
         categories = {
                 ConfigMining.class,
+                ConfigFishing.class,
                 ConfigBosses.class,
                 ConfigClan.class,
-                ConfigCalculator.class,
                 ConfigChat.class,
                 ConfigVisual.class,
                 HudConfig.class
@@ -30,10 +30,7 @@ import com.teamresourceful.resourcefulconfig.api.annotations.*;
 )
 public class Config {
     @ConfigButton(text = "Открыть", title = "Открыть настройки EvoAssist")
-    public static final Runnable openEvoAssistButton = () -> {
-        var client = EvoAssistClient.instance;
-        client.gui.setScreen(new EvoConfigScreen(client.gui.screen()));
-    };
+    public static final Runnable openEvoAssistButton = EvoPlusIntegration::openWidgetSettings;
 
 
 }

@@ -126,12 +126,6 @@ tasks.register('checkRewardStatistics', JavaExec) {
 
 tasks.named('check') { dependsOn 'checkRewardStatistics' }
 
-tasks.register('checkLevelCalculator', JavaExec) {
-    dependsOn compileRewardChecks
-    classpath = files(sourceSets.main.output, compileRewardChecks.flatMap { it.destinationDirectory })
-    mainClass = 'com.konzy.evo_assist.client.features.calculator.LevelCalculatorChecks'
-}
-
 tasks.register('checkPlayerKills', JavaExec) {
     dependsOn compileRewardChecks
     classpath = files(sourceSets.main.output, compileRewardChecks.flatMap { it.destinationDirectory })
@@ -139,7 +133,7 @@ tasks.register('checkPlayerKills', JavaExec) {
     args layout.buildDirectory.dir('killChecks').get().asFile.absolutePath
 }
 
-tasks.named('check') { dependsOn 'checkLevelCalculator', 'checkPlayerKills' }
+tasks.named('check') { dependsOn 'checkPlayerKills' }
 
 tasks.register('checkAdditionalGoals', JavaExec) {
     dependsOn compileRewardChecks
@@ -219,3 +213,36 @@ publishing {
         // retrieving dependencies.
     }
 }
+
+// Mining statistics and goals share confirmed breaks; rewards update money independently.
+tasks.register('checkConfirmedMining', JavaExec) {
+    dependsOn compileRewardChecks
+    classpath = files(sourceSets.main.output, compileRewardChecks.flatMap { it.destinationDirectory }, configurations.compileClasspath)
+    mainClass = 'com.konzy.evo_assist.client.features.mine.blockPH.ConfirmedMiningChecks'
+    args layout.buildDirectory.dir('confirmedMiningChecks').get().asFile.absolutePath
+}
+
+tasks.register('checkGoalEditing', JavaExec) {
+    dependsOn compileRewardChecks
+    classpath = files(sourceSets.main.output, compileRewardChecks.flatMap { it.destinationDirectory })
+    mainClass = 'com.konzy.evo_assist.client.compat.evoplus.GoalChangesChecks'
+}
+
+tasks.named('check') { dependsOn 'checkConfirmedMining', 'checkGoalEditing' }
+
+tasks.register('checkServerConfirmedBreaks', JavaExec) {
+    dependsOn compileRewardChecks
+    classpath = files(sourceSets.main.output, compileRewardChecks.flatMap { it.destinationDirectory }, configurations.compileClasspath)
+    mainClass = 'com.konzy.evo_assist.client.features.mine.blockPH.ServerConfirmedBlockBreaksChecks'
+}
+
+tasks.named('check') { dependsOn 'checkServerConfirmedBreaks' }
+
+tasks.register('checkFishing', JavaExec) {
+    dependsOn compileRewardChecks
+    classpath = files(sourceSets.main.output, compileRewardChecks.flatMap { it.destinationDirectory })
+    mainClass = 'com.konzy.evo_assist.client.features.fishing.FishingChecks'
+    args layout.buildDirectory.dir('fishingChecks').get().asFile.absolutePath
+}
+
+tasks.named('check') { dependsOn 'checkFishing' }

@@ -8,35 +8,28 @@ package com.konzy.evo_assist.client.features.mine.blockPH;
 import com.konzy.evo_assist.client.EvoAssistClient;
 import com.konzy.evo_assist.client.config.ConfigMining;
 import com.konzy.evo_assist.client.features.mine.MiningGoals;
-import com.konzy.evo_assist.client.features.goals.AdditionalGoals;
 import com.konzy.evo_assist.client.util.MoneyUtils;
-import net.fabricmc.fabric.api.event.client.player.ClientPlayerBlockBreakEvents;
-import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.player.LocalPlayer;
-import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
-import org.jspecify.annotations.NonNull;
 
 import java.util.Arrays;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
+public class BlockProfitPerHour {
 
     // Config
     private static final long AUTO_PAUSE_AFTER_MS = 5_000;
-    private static final long PRICE_FRESH_MS = 10_000;
     private final MiningStatistics statistics;
+    private final ConfirmedBlockRewards confirmedRewards = new ConfirmedBlockRewards(this::confirmedBlock);
+    private final ServerConfirmedBlockBreaks confirmedBreaks = new ServerConfirmedBlockBreaks(this::confirmedBreak);
     
     public long totalBrokenBlocks = 0;
     public long uptime = 0;
     public long totalMoney = 0;
     public long totalShards = 0;
     private long lastBlockBreakAt = -1;
-    private long lastPriceAt = -1;
-    private long latestPrice;
-    private long blocksAwaitingPrice;
     public boolean paused = true;
 
     public long BlocksPerHour = 0;
@@ -45,7 +38,6 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
 
 
     private static final Pattern MONEY_PATTERN = Pattern.compile("(\\d+(?:\\.\\d+)?[KMBTQ])", Pattern.CASE_INSENSITIVE);
-    private static final Pattern ACTION_BAR_PATTERN = Pattern.compile("\\+\\s*(\\d+(?:[.,]\\d+)?[KMBTQ]?)", Pattern.CASE_INSENSITIVE);
     private static final Pattern SHARD_MULTIPLIER_PATTERN = Pattern.compile("(\\d+)");
 
     public BlockProfitPerHour(MiningStatistics statistics) {
@@ -54,32 +46,46 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
     }
 
     public void connect(String address) {
-        flushKnownPendingPrice();
         clearActivity();
+        confirmedBreaks.clear();
         statistics.connect(address);
         refreshStatistics();
     }
 
     public void disconnect() {
-        flushKnownPendingPrice();
+        confirmedBreaks.clear();
         statistics.disconnect();
         clearActivity();
         refreshStatistics();
     }
 
-    @Override
-    public void afterBlockBreak(@NonNull ClientLevel world, @NonNull LocalPlayer player,
-                                @NonNull BlockPos pos, @NonNull BlockState state) {
-        if (!statistics.isConnected()) return;
-        long now = System.currentTimeMillis();
-        lastBlockBreakAt = now;
+    private void confirmedBlock(long reward) {
+        long money = countBlockMoney() ? reward : 0;
+        if (money > 0) {
+            record(0, money, 0);
+            MiningGoals.getInstance().moneyEarned(money);
+        }
+    }
+
+    private void confirmedBreak() {
+        lastBlockBreakAt = System.currentTimeMillis();
         paused = false;
-        boolean priced = latestPrice > 0 && lastPriceAt >= 0 && now - lastPriceAt <= PRICE_FRESH_MS;
-        record(1, priced && countBlockMoney() ? latestPrice : 0, 0);
-        AdditionalGoals.getInstance().blockBroken(true);
-        MiningGoals.getInstance().blockBroken(true);
-        if (priced) MiningGoals.getInstance().recordBlockReward(latestPrice);
-        else blocksAwaitingPrice++;
+        record(1, 0, 0);
+        MiningGoals.getInstance().blockBroken();
+    }
+
+    public void localBlockBreak(BlockPos pos) {
+        if (!statistics.isConnected()) return;
+        confirmedBreaks.localBreak(pos);
+    }
+
+    public void serverBlockUpdate(BlockPos pos, BlockState state) {
+        if (!statistics.isConnected()) return;
+        confirmedBreaks.serverUpdate(pos, state.isAir());
+    }
+
+    public void expirePendingBreaks() {
+        confirmedBreaks.expirePending();
     }
 
     public boolean hasStatistics() {
@@ -87,6 +93,7 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
     }
 
     public void reset() {
+        confirmedBreaks.clear();
         statistics.reset();
         clearActivity();
         refreshStatistics();
@@ -94,42 +101,15 @@ public class BlockProfitPerHour implements ClientPlayerBlockBreakEvents.After {
 
     private void clearActivity() {
         lastBlockBreakAt = -1;
-        lastPriceAt = -1;
-        latestPrice = 0;
-        blocksAwaitingPrice = 0;
-        MiningGoals.getInstance().expirePendingPrices();
         paused = true;
     }
     public void updateActionBar(Component text) {
         if (!statistics.isConnected()) return;
-        Matcher matchingText = ACTION_BAR_PATTERN.matcher(text.getString().replaceAll("§.", ""));
-        if(matchingText.find()) {
-            long price = MoneyUtils.convertFrom(matchingText.group(1).replace(',', '.'));
-            if (price <= 0) return;
-            latestPrice = price;
-            lastPriceAt = System.currentTimeMillis();
-            if (blocksAwaitingPrice > 0) creditPendingBlocks(price);
-        }
+        confirmedRewards.actionBar(text.getString());
     }
 
     private boolean countBlockMoney() {
         return Arrays.asList(ConfigMining.bphWidgetAllowed).contains(ConfigMining.bphAllowEnum.BLOCKS);
-    }
-
-    private void flushKnownPendingPrice() {
-        if (statistics.isConnected() && blocksAwaitingPrice > 0 && latestPrice > 0) {
-            creditPendingBlocks(latestPrice);
-        }
-    }
-
-    private void creditPendingBlocks(long price) {
-        long count = blocksAwaitingPrice;
-        blocksAwaitingPrice = 0;
-        if (countBlockMoney()) {
-            long estimated = price > Long.MAX_VALUE / count ? Long.MAX_VALUE : price * count;
-            record(0, estimated, 0);
-        }
-        MiningGoals.getInstance().recordPendingBlockRewards(price);
     }
 
     public void getMessage(Component text, boolean overlay) {

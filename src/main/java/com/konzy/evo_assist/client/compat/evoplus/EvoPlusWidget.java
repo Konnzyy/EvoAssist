@@ -39,12 +39,14 @@ public final class EvoPlusWidget implements WidgetRenderer {
         int textX = value.iconSize() + 3;
         int lineStep = context.lineHeight() + 1;
         int textWidth = value.lines().stream().mapToInt(context::textWidth).max().orElse(0);
-        int height = Math.max(value.iconSize(), value.lines().size() * lineStep) + 2;
+        int textHeight = Math.max(0, value.lines().size() * lineStep - 1);
+        int height = Math.max(value.iconSize(), textHeight) + 2;
+        double textY = (height - textHeight) / 2.0;
         element.size(textX + textWidth + 2, height);
         context.texture(value.texture(), 0, Math.max(0, (height - value.iconSize()) / 2.0),
                 value.iconSize(), value.iconSize());
         for (int i = 0; i < value.lines().size(); i++) {
-            context.text(value.lines().get(i), textX, 1 + i * lineStep, 0xFFFFFFFF, true);
+            context.text(value.lines().get(i), textX, textY + i * lineStep, 0xFFFFFFFF, true);
         }
     }
 }

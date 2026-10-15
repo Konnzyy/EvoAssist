@@ -3,9 +3,12 @@ package com.konzy.evo_assist.client.compat.evoplus;
 import com.konzy.evo_assist.client.config.ConfigBosses;
 import com.konzy.evo_assist.client.config.ConfigChat;
 import com.konzy.evo_assist.client.config.ConfigClan;
+import com.konzy.evo_assist.client.config.ConfigFishing;
 import com.konzy.evo_assist.client.config.ConfigMining;
 import com.konzy.evo_assist.client.config.ConfigVisual;
 import com.konzy.evo_assist.client.util.Texts;
+import com.konzy.evo_assist.client.features.fishing.FishingData;
+import com.konzy.evo_assist.client.features.fishing.FishingGoals;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
 import java.nio.file.Files;
@@ -18,11 +21,18 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.function.Function;
+import java.util.function.BooleanSupplier;
+import ru.dargen.evoplus.api.ui.Ui;
+import ru.dargen.evoplus.api.ui.UiElement;
 import ru.dargen.evoplus.api.addon.Addon;
 import ru.dargen.evoplus.api.render.RenderContext;
 import ru.dargen.evoplus.api.render.WidgetRenderer;
 import ru.dargen.evoplus.api.setting.AddonSettings;
 import ru.dargen.evoplus.api.setting.SettingCategory;
+import ru.dargen.evoplus.api.setting.SettingSection;
 import ru.dargen.evoplus.api.setting.type.WidgetElement;
 
 /** Exercises the public API contract without starting Minecraft or writing game settings. */
@@ -41,6 +51,7 @@ public final class EvoPlusIntegrationChecks {
         boolean enabled;
         int enabledWrites;
         double width, height;
+        boolean chatMovable = true;
         WidgetRenderer renderer;
         final WidgetElement element = proxy(WidgetElement.class, (self, method, args) -> switch (method.getName()) {
             case "description" -> { description = (String) args[0]; yield self; }
@@ -49,13 +60,27 @@ public final class EvoPlusIntegrationChecks {
             case "setEnabled" -> { enabled = (boolean) args[0]; enabledWrites++; yield null; }
             case "getWidth" -> width;
             case "getHeight" -> height;
+            case "chatMovable" -> { chatMovable = (boolean) args[0]; yield self; }
             default -> throw new AssertionError("Unexpected widget API: " + method);
         });
+    }
+
+    private static final class ControlState {
+        String name, description;
+        Supplier<List<String>> options;
+        Supplier<Object> get;
+        Consumer<Object> set;
+        Runnable action;
+        Function<Ui, UiElement<?>> factory;
+        BooleanSupplier visible = () -> true;
+        Object element;
     }
 
     private static final class SettingsState {
         final Map<String, WidgetState> widgets = new LinkedHashMap<>();
         final Map<String, String> categories = new LinkedHashMap<>();
+        final Map<String, Object> containers = new LinkedHashMap<>();
+        final Map<String, ControlState> controls = new LinkedHashMap<>();
         Path file;
         int saves, opens;
         boolean savedVisibility;
@@ -63,11 +88,20 @@ public final class EvoPlusIntegrationChecks {
             case "getFile" -> file;
             case "save" -> { saves++; yield null; }
             case "open" -> { opens++; yield null; }
+            case "onSave" -> self;
             case "category" -> {
                 String id = (String) args[0];
-                check(categories.put(id, (String) args[1]) == null, "Unique category " + id);
-                yield proxy(SettingCategory.class, (container, operation, values) -> {
-                    if (!operation.getName().equals("widget")) throw new AssertionError(operation);
+                categories.putIfAbsent(id, (String) args[1]);
+                yield container(id, SettingCategory.class);
+            }
+            default -> throw new AssertionError("Unexpected settings API: " + method);
+        });
+
+        @SuppressWarnings("unchecked")
+        private <T> T container(String path, Class<T> type) {
+            return type.cast(containers.computeIfAbsent(path, key -> proxy(type, (container, operation, values) -> {
+                if (operation.getName().equals("section")) return container(path + "/" + values[0], SettingSection.class);
+                if (operation.getName().equals("widget")) {
                     String widgetId = (String) values[0];
                     var state = new WidgetState();
                     state.enabled = savedVisibility;
@@ -76,12 +110,29 @@ public final class EvoPlusIntegrationChecks {
                     state.renderer = (WidgetRenderer) values[4];
                     check(widgets.put(widgetId, state) == null, "Unique widget " + widgetId);
                     return state.element;
-                });
-            }
-            default -> throw new AssertionError("Unexpected settings API: " + method);
-        });
+                }
+                if (Set.of("toggle", "intField", "text", "enumSelect", "choice", "intSlider", "key", "button", "custom").contains(operation.getName())) {
+                    var control = new ControlState();
+                    control.name = (String) values[1];
+                    if (operation.getName().equals("choice")) control.options = (Supplier<List<String>>) values[3];
+                    if (operation.getName().equals("button")) control.action = (Runnable) values[3];
+                    if (operation.getName().equals("custom")) control.factory = (Function<Ui, UiElement<?>>) values[2];
+                    control.element = proxy(operation.getReturnType(), (self, method, args) -> switch (method.getName()) {
+                        case "description" -> { control.description = (String) args[0]; yield self; }
+                        case "bind" -> { control.get = (Supplier<Object>) args[0]; control.set = (Consumer<Object>) args[1]; yield self; }
+                        case "visible" -> { control.visible = (BooleanSupplier) args[0]; yield self; }
+                        case "names", "modifiers", "maxLength", "validator" -> self;
+                        default -> throw new AssertionError("Unexpected native control API: " + method);
+                    });
+                    check(controls.put(path + "/" + values[0], control) == null, "Unique setting " + path + "/" + values[0]);
+                    return control.element;
+                }
+                throw new AssertionError(operation);
+            })));
+        }
         final Addon addon = proxy(Addon.class, (self, method, args) -> {
             if (method.getName().equals("getSettings")) return settings;
+            if (method.getName().equals("getUi")) return null; // Registration does not open UI windows.
             throw new AssertionError(method);
         });
     }
@@ -103,8 +154,10 @@ public final class EvoPlusIntegrationChecks {
         new EvoPlusIntegration().onInitialize(first.addon);
         check(first.widgets.keySet().equals(Set.of("mining_statistics", "block_goal", "time_goal", "money_goal",
                 "shards_goal", "boss_rewards", "boss_tokens", "clan_statistics", "clan_points_goal",
-                "clan_gold_goal", "clan_experience_goal", "chat_tabs", "player_kills")), "Every existing HUD widget registered");
-        check(first.categories.size() == 7, "Seven localized categories");
+                "clan_gold_goal", "clan_experience_goal", "chat_tabs", "player_kills", "fishing_goal")), "Every HUD widget registered");
+        check(first.categories.size() == 8 && !first.categories.containsKey("calculator"), "Eight native categories including fishing goals");
+        check(first.categories.get("chat").equals("evoassist.page.interface.title") && !first.categories.containsKey("interface"),
+                "Chat and general controls share Interface while retaining the persisted chat widget path");
         check(first.categories.values().stream().noneMatch(name -> Texts.tr(name).equals(name)), "Category translations exist");
         for (var widget : first.widgets.values()) {
             check(widget.enabledWrites == 1, "Visibility initialized once");
@@ -118,6 +171,71 @@ public final class EvoPlusIntegrationChecks {
         first.widgets.get("chat_tabs").enabled = false;
         check(!EvoPlusIntegration.chatTabsEnabled(), "Disabling in EvoPlus disables chat controls");
         check(!first.widgets.get("player_kills").enabled, "New kills widget starts disabled for manual placement");
+        check(!first.widgets.get("chat_tabs").chatMovable, "Chat controls default to receiving clicks instead of dragging");
+        check(first.controls.size() == 46, "Existing controls and twelve fishing controls registered");
+        for (var id : List.of("blockGoal", "timeGoal", "moneyGoal", "shardGoal", "clanPointsGoal", "clanGoldGoal", "clanExperienceGoal")) {
+            String path = (id.startsWith("clan") ? "clan_goals/" : "mining_goals/") + id + "/" + id;
+            check(!first.controls.get(path + "_target").visible.getAsBoolean(), "No duplicate native field for " + id);
+            check(first.controls.get(path + "_control").factory != null
+                    && first.controls.get(path + "_control").visible.getAsBoolean(), "Inline reset and input available for " + id);
+        }
+        check(first.controls.keySet().stream().noneMatch(key -> key.endsWith("_reset")), "Individual goal reset cards removed");
+        for (var control : first.controls.values()) {
+            check(!Texts.tr(control.name).equals(control.name), "Localized native control: " + control.name);
+            check(!Texts.tr(control.description).equals(control.description), "Localized native description: " + control.description);
+            check(control.action != null || control.factory != null
+                    || (control.get != null && control.set != null), "Every value uses existing config storage");
+        }
+        var petWorld = first.controls.get("fishing_goals/pet/world");
+        var buckets = first.controls.get("fishing_goals/general/include_buckets");
+        check(Boolean.TRUE.equals(buckets.get.get()), "Bucket experience starts enabled");
+        buckets.set.accept(false);
+        check(!ConfigFishing.includeBuckets, "Native toggle disables bucket counting in config");
+        buckets.set.accept(true);
+        check(ConfigFishing.includeBuckets, "Native toggle can enable bucket counting again");
+        var customWorld = first.controls.get("fishing_goals/custom/world");
+        var currentLevel = first.controls.get("fishing_goals/pet/current_level");
+        var targetLevel = first.controls.get("fishing_goals/pet/target_level");
+        check(currentLevel.options != null && targetLevel.options != null, "Both pet levels use native choices");
+        petWorld.set.accept(FishingData.World.OVERWORLD);
+        check(currentLevel.options.get().equals(List.of("1", "2", "3", "4", "5", "6", "7", "8", "9", "10"))
+                && targetLevel.options.get().getLast().equals("11"), "Overworld choices end at the transition to level 11");
+        currentLevel.set.accept("10");
+        check(targetLevel.options.get().equals(List.of("11")) && targetLevel.get.get().equals("11"),
+                "The last Overworld level has exactly one valid target");
+        customWorld.set.accept(FishingData.World.END);
+        petWorld.set.accept(FishingData.World.NETHER);
+        check(currentLevel.options.get().equals(List.of("11", "12", "13", "14", "15"))
+                && currentLevel.get.get().equals("11") && targetLevel.get.get().equals("12"),
+                "Changing to Nether updates both choices and their selected values");
+        currentLevel.set.accept("15");
+        check(targetLevel.options.get().equals(List.of("16")) && targetLevel.get.get().equals("16"),
+                "Nether choices stop at level 16");
+        petWorld.set.accept(FishingData.World.END);
+        check(currentLevel.options.get().equals(List.of("16", "17", "18", "19", "20"))
+                && targetLevel.options.get().equals(List.of("17", "18", "19", "20", "21")),
+                "End choices cover the final five transitions");
+        targetLevel.set.accept("21");
+        petWorld.set.accept(FishingData.World.OVERWORLD);
+        check(currentLevel.get.get().equals("10") && targetLevel.get.get().equals("11"),
+                "Returning to Overworld removes out-of-range selected levels");
+        check(customWorld.get.get() == FishingData.World.END && ConfigFishing.customWorld == FishingData.World.END,
+                "Experience goal world stays independent from the pet goal world");
+        ConfigFishing.currentLevel = 1; ConfigFishing.targetLevel = 2; ConfigFishing.customWorld = FishingData.World.OVERWORLD;
+        ConfigMining.bphWidgetAllowed = new ConfigMining.bphAllowEnum[] { ConfigMining.bphAllowEnum.BARRELS };
+        var blockSource = first.controls.get("mining/sources/blocks");
+        check(Boolean.FALSE.equals(blockSource.get.get()), "Native control reads existing source selection");
+        blockSource.set.accept(true);
+        check(java.util.Arrays.asList(ConfigMining.bphWidgetAllowed).containsAll(List.of(
+                ConfigMining.bphAllowEnum.BARRELS, ConfigMining.bphAllowEnum.BLOCKS)), "Source toggle preserves other selections");
+        blockSource.set.accept(false);
+        check(ConfigMining.bphWidgetAllowed.length == 1 && ConfigMining.bphWidgetAllowed[0] == ConfigMining.bphAllowEnum.BARRELS,
+                "Turning a source off removes only that source");
+        ConfigMining.blockGoalTarget = 1234;
+        var targetField = first.controls.get("mining_goals/blockGoal/blockGoal_target");
+        check(targetField.get.get().equals(1234), "Existing target appears in native input");
+        targetField.set.accept(5678);
+        check(ConfigMining.blockGoalTarget == 1234 && targetField.get.get().equals(5678), "Typing cannot reset an active goal before saving");
         check(first.saves == 1, "Migration persisted by EvoPlus");
         EvoPlusIntegration.openWidgetSettings();
         check(first.opens == 1, "Settings shortcut uses EvoPlus");
@@ -154,7 +272,7 @@ public final class EvoPlusIntegrationChecks {
         RenderContext context = proxy(RenderContext.class, (self, method, values) -> switch (method.getName()) {
             case "isEditing" -> editing.get();
             case "lineHeight" -> 9;
-            case "textWidth" -> ((String) values[0]).length() * 6;
+            case "textWidth" -> ((String) values[0]).replaceAll("§.", "").length() * 6;
             case "text", "texture" -> { draws.add(values); yield null; }
             default -> throw new AssertionError("Renderer uses unsupported or absolute API: " + method);
         });
@@ -164,16 +282,54 @@ public final class EvoPlusIntegrationChecks {
         renderer.render(context);
         check(draws.size() == 3, "Editor preview draws icon and both lines even without an active goal");
         check((double) draws.getFirst()[1] == 0, "Icon drawn relative to widget origin");
-        check((double) draws.get(1)[1] == 23 && (double) draws.get(1)[2] == 1, "Text uses same widget coordinates");
-        check((double) draws.get(2)[2] == 11, "Lines do not overlap");
+        check((double) draws.get(1)[1] == 23 && (double) draws.get(1)[2] == 1.5, "Text is centered in the widget bounds");
+        check((double) draws.get(2)[2] == 11.5, "Lines do not overlap");
         check((int) draws.get(1)[3] == 0xFFFFFFFF, "Text remains opaque");
         var state = rendererSettings.widgets.get("render");
         check(state.width == 73 && state.height == 22, "Editor bounds contain icon and text");
         draws.clear(); editing.set(false); available.set(true);
         value.set(new EvoPlusWidget.Content("minecraft:textures/item/nether_star.png", 24, List.of("A much longer counter", "Two", "Three")));
         renderer.render(context);
-        check(draws.size() == 4 && state.width > 73 && state.height == 32, "Live data resizes bounds without overriding position or scale");
+        check(draws.size() == 4 && state.width > 73 && state.height == 31, "Live data resizes bounds without overriding position or scale");
         check(state.enabledWrites == 0, "Rendering does not change visibility");
+        draws.clear();
+        value.set(new EvoPlusWidget.Content("minecraft:textures/item/diamond_sword.png", 16, List.of("Kills: 135")));
+        renderer.render(context);
+        check(state.height == 18 && (double) draws.get(1)[2] == 4.5,
+                "Single-line kill counter is vertically centered against the sword");
+        draws.clear();
+        var fishingGoal = FishingGoals.Goal.level(FishingData.World.END, FishingData.Rarity.LEGENDARY, 18, 19, 663552);
+        var fishingContent = EvoPlusIntegration.fishingContent(fishingGoal, 15000);
+        check(fishingContent.lines().size() == 5 && fishingContent.lines().get(3).contains("§b15000§f / 155648")
+                && fishingContent.lines().get(4).contains("§6140648§f"), "Fishing widget colors full inventory experience and remainder");
+        check(fishingContent.lines().getFirst().contains("§6Legendary§f")
+                && fishingContent.lines().get(1).contains("§dEnd§f")
+                && fishingContent.lines().get(2).contains("§dlevel 19§f"), "Pet rarity, world and full target level have their own colors");
+        value.set(fishingContent);
+        renderer.render(context);
+        check(draws.size() == 6 && state.height == 51, "Fishing bounds include the fish and all five rows");
+        check((double) draws.getFirst()[2] + 12 == state.height / 2,
+                "The fish icon is centered vertically beside the third text row");
+        var customFishing = EvoPlusIntegration.fishingContent(FishingGoals.Goal.custom(FishingData.World.OVERWORLD, 40000), 15009);
+        check(customFishing.lines().size() == 3 && customFishing.lines().getFirst().contains("§aOverworld§f")
+                && customFishing.lines().get(1).contains("§b15009§f / 40000")
+                && customFishing.lines().get(2).contains("§624991§f"),
+                "Experience goal shows only world, inventory progress and remaining experience");
+        value.set(customFishing); draws.clear(); renderer.render(context);
+        check(draws.size() == 4 && state.height == 31 && (double) draws.getFirst()[2] + 12 == state.height / 2,
+                "The three-row experience widget keeps its fish centered");
+        for (var world : FishingData.World.values()) {
+            String color = switch (world) { case OVERWORLD -> "§a"; case NETHER -> "§c"; case END -> "§d"; };
+            var colored = EvoPlusIntegration.fishingContent(FishingGoals.Goal.custom(world, 100), 0);
+            check(colored.lines().getFirst().contains(color + Texts.tr(world.label()) + "§f"), "World color in experience goal: " + world);
+        }
+        for (var rarity : FishingData.Rarity.values()) {
+            String color = switch (rarity) { case COMMON -> "§a"; case RARE -> "§e"; case LEGENDARY -> "§6"; };
+            var colored = EvoPlusIntegration.fishingContent(FishingGoals.Goal.level(FishingData.World.OVERWORLD, rarity, 1, 2, 0), 0);
+            check(colored.lines().getFirst().contains(color + Texts.tr(rarity.label()) + "§f"), "Pet rarity color: " + rarity);
+        }
+        check(ResetDetails.amount(new java.math.BigDecimal("12345678901234567890.125"))
+                .equals("12 345 678 901 234 567 890.125"), "Reset dialogs retain exact money without abbreviation or rounding");
 
         ConfigVisual.goalNoticeDurationSeconds = 17;
         var notification = EvoPlusIntegration.goalNotification("Goal reached");

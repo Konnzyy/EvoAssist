@@ -16,6 +16,8 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Properties;
 import java.util.Locale;
+import java.util.function.Consumer;
+import java.util.function.IntSupplier;
 
 public final class MiningGoals {
     public static final class Goal {
@@ -25,7 +27,6 @@ public final class MiningGoals {
         public long shards;
         public boolean complete;
         private int target;
-        private int pendingPriceBlocks;
 
         private void reset(int newTarget) {
             blocks = 0;
@@ -34,14 +35,13 @@ public final class MiningGoals {
             shards = 0;
             complete = false;
             target = newTarget;
-            pendingPriceBlocks = 0;
         }
 
         public int target() { return target; }
         public boolean active() { return target > 0; }
         public boolean hasProgress() {
             return blocks != 0 || activeMillis != 0 || money != 0 || shards != 0
-                    || complete || pendingPriceBlocks != 0;
+                    || complete;
         }
         public boolean wouldResetProgress(int newTarget) {
             return active() && !complete && hasProgress() && target != newTarget;
@@ -49,18 +49,34 @@ public final class MiningGoals {
     }
 
     private static MiningGoals instance;
-    private final Path file = FabricLoader.getInstance().getConfigDir().resolve("evoassist_mining_goals.properties");
+    private final Path file;
+    private final IntSupplier blockTarget;
+    private final IntSupplier timeTarget;
+    private final AdditionalGoals additionalGoals;
+    private final Consumer<String> notify;
+    private final Consumer<Exception> reportError;
     private final Goal blocks = new Goal();
     private final Goal time = new Goal();
     private long lastSave;
 
-    private MiningGoals() {
+    public MiningGoals(Path file, IntSupplier blockTarget, IntSupplier timeTarget, AdditionalGoals additionalGoals,
+                       Consumer<String> notify, Consumer<Exception> reportError) {
+        this.file = file;
+        this.blockTarget = blockTarget;
+        this.timeTarget = timeTarget;
+        this.additionalGoals = additionalGoals;
+        this.notify = notify;
+        this.reportError = reportError;
         load();
         syncTargets();
     }
 
     public static MiningGoals getInstance() {
-        if (instance == null) instance = new MiningGoals();
+        if (instance == null) instance = new MiningGoals(
+                FabricLoader.getInstance().getConfigDir().resolve("evoassist_mining_goals.properties"),
+                () -> ConfigMining.blockGoalTarget, () -> ConfigMining.timeGoalMinutes,
+                AdditionalGoals.getInstance(), message -> EvoPlusIntegration.notifyGoal(message, false),
+                error -> EvoAssistClient.logger.warn("Could not update mining goals", error));
         return instance;
     }
 
@@ -79,8 +95,8 @@ public final class MiningGoals {
     }
 
     public void syncTargets() {
-        int blockTarget = Math.max(0, ConfigMining.blockGoalTarget);
-        int timeTarget = Math.max(0, ConfigMining.timeGoalMinutes);
+        int blockTarget = Math.max(0, this.blockTarget.getAsInt());
+        int timeTarget = Math.max(0, this.timeTarget.getAsInt());
         boolean changed = false;
         if (blocks.target != blockTarget) {
             blocks.reset(blockTarget);
@@ -94,79 +110,58 @@ public final class MiningGoals {
     }
 
     public void resetAll() {
-        blocks.reset(Math.max(0, ConfigMining.blockGoalTarget));
-        time.reset(Math.max(0, ConfigMining.timeGoalMinutes));
-        AdditionalGoals.getInstance().reset(false);
+        blocks.reset(Math.max(0, this.blockTarget.getAsInt()));
+        time.reset(Math.max(0, this.timeTarget.getAsInt()));
+        additionalGoals.reset(false);
         save();
     }
 
-    public void blockBroken(boolean pricePending) {
+    /** Count a block only after its removal is confirmed by the server. */
+    public void blockBroken() {
         syncTargets();
+        additionalGoals.blockBroken();
         if (blocks.active() && !blocks.complete) {
             blocks.blocks++;
-            if (pricePending) blocks.pendingPriceBlocks++;
             if (blocks.blocks >= blocks.target) finish(blocks, blockNotice(blocks.target));
         }
         if (time.active() && !time.complete) {
             time.blocks++;
-            if (pricePending) time.pendingPriceBlocks++;
         }
         savePeriodically();
     }
 
-    public void recordBlockReward(long pricePerBlock) {
-        if (pricePerBlock <= 0) return;
-        AdditionalGoals.getInstance().recordBlockReward(pricePerBlock);
+    /** Combined callback retained for integrations that provide break and reward together. */
+    public void confirmedBlock(long money) {
         syncTargets();
-        creditBlockReward(blocks, pricePerBlock);
-        creditBlockReward(time, pricePerBlock);
-        savePeriodically();
-    }
-
-    public void recordPendingBlockRewards(long pricePerBlock) {
-        if (pricePerBlock <= 0) return;
-        AdditionalGoals.getInstance().recordPendingBlockRewards(pricePerBlock);
-        syncTargets();
-        creditPendingRewards(blocks, pricePerBlock);
-        creditPendingRewards(time, pricePerBlock);
-        savePeriodically();
-    }
-
-    private static void creditPendingRewards(Goal goal, long price) {
-        int count = goal.pendingPriceBlocks;
-        goal.pendingPriceBlocks = 0;
-        if (count <= 0) return;
-        long earned = price > Long.MAX_VALUE / count ? Long.MAX_VALUE : price * count;
-        goal.money = earned > Long.MAX_VALUE - goal.money ? Long.MAX_VALUE : goal.money + earned;
-    }
-
-    private static void creditBlockReward(Goal goal, long price) {
-        if (goal.pendingPriceBlocks > 0) {
-            goal.pendingPriceBlocks--;
-            goal.money += price;
-        } else if (goal.active() && !goal.complete) {
-            goal.money += price;
+        additionalGoals.confirmedBlock(money);
+        if (blocks.active() && !blocks.complete) {
+            blocks.blocks++;
+            blocks.money = add(blocks.money, money);
+            if (blocks.blocks >= blocks.target) finish(blocks, blockNotice(blocks.target));
         }
+        if (time.active() && !time.complete) {
+            time.blocks++;
+            time.money = add(time.money, money);
+        }
+        savePeriodically();
     }
 
-    public void expirePendingPrices() {
-        AdditionalGoals.getInstance().expirePendingPrices();
-        blocks.pendingPriceBlocks = 0;
-        time.pendingPriceBlocks = 0;
+    private static long add(long total, long amount) {
+        return amount > Long.MAX_VALUE - total ? Long.MAX_VALUE : total + amount;
     }
 
     public void moneyEarned(long amount) {
         if (amount <= 0) return;
-        AdditionalGoals.getInstance().moneyEarned(amount);
+        additionalGoals.moneyEarned(amount);
         syncTargets();
-        if (blocks.active() && !blocks.complete) blocks.money += amount;
-        if (time.active() && !time.complete) time.money += amount;
+        if (blocks.active() && !blocks.complete) blocks.money = add(blocks.money, amount);
+        if (time.active() && !time.complete) time.money = add(time.money, amount);
         savePeriodically();
     }
 
     public void shardsEarned(long amount) {
         if (amount <= 0) return;
-        AdditionalGoals.getInstance().shardsEarned(amount);
+        additionalGoals.shardsEarned(amount);
         syncTargets();
         if (blocks.active() && !blocks.complete) blocks.shards += amount;
         if (time.active() && !time.complete) time.shards += amount;
@@ -174,7 +169,7 @@ public final class MiningGoals {
     }
 
     public void activeSecond() {
-        AdditionalGoals.getInstance().activeSecond();
+        additionalGoals.activeSecond();
         syncTargets();
         if (blocks.active() && !blocks.complete) blocks.activeMillis += 1_000;
         if (time.active() && !time.complete) {
@@ -186,9 +181,7 @@ public final class MiningGoals {
 
     private void finish(Goal goal, String message) {
         goal.complete = true;
-        if (ConfigMining.goalNotifications) {
-            showNotice(message, false);
-        }
+        notify.accept(message);
         save();
     }
 
@@ -213,7 +206,7 @@ public final class MiningGoals {
             Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
             lastSave = System.currentTimeMillis();
         } catch (IOException error) {
-            EvoAssistClient.logger.warn("Could not save mining goals", error);
+            reportError.accept(error);
         }
     }
 
@@ -225,7 +218,7 @@ public final class MiningGoals {
             loadGoal(values, "blocks", blocks);
             loadGoal(values, "time", time);
         } catch (IOException | NumberFormatException error) {
-            EvoAssistClient.logger.warn("Could not load mining goals", error);
+            reportError.accept(error);
             blocks.reset(0);
             time.reset(0);
         }

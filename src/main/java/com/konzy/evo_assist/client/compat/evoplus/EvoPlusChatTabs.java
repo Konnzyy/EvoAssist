@@ -25,7 +25,7 @@ public final class EvoPlusChatTabs implements WidgetRenderer {
 
     public EvoPlusChatTabs(SettingContainer category, boolean migrate, boolean enabled) {
         element = category.widget("chat_tabs", "evoassist.ui.chatTabs.title", 240, 12, this)
-                .description("evoassist.ui.chatTabs.hint");
+                .description("evoassist.ui.chatTabs.hint").chatMovable(false);
         if (migrate) element.setEnabled(enabled);
     }
 

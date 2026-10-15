@@ -11,6 +11,10 @@ import com.konzy.evo_assist.client.config.Config;
 import com.konzy.evo_assist.client.config.ConfigClan;
 import com.konzy.evo_assist.client.config.ConfigMining;
 import com.konzy.evo_assist.client.config.ConfigVisual;
+import com.konzy.evo_assist.client.config.ConfigFishing;
+import com.konzy.evo_assist.client.features.fishing.FishingData;
+import com.konzy.evo_assist.client.features.fishing.FishingGoals;
+import com.konzy.evo_assist.client.features.fishing.FishingInventory;
 import com.konzy.evo_assist.client.features.goals.AdditionalGoals;
 import com.konzy.evo_assist.client.features.goals.AdditionalGoals.Type;
 import com.konzy.evo_assist.client.features.mine.MiningGoals;
@@ -58,8 +62,9 @@ public final class EvoPlusIntegration implements EvoPlusAddon {
             ConfigVisual.widgetsInitializedForEvoPlus = true;
             widgetMigrationNeedsSave = true;
         }
+        new EvoPlusSettings(addon).register();
         LoggerFactory.getLogger("EvoAssist").info(
-                "Registered 13 EvoAssist widgets in EvoPlus; initialized disabled visibility: {}", initializeVisibility);
+                "Registered 14 EvoAssist widgets in EvoPlus; initialized disabled visibility: {}", initializeVisibility);
     }
 
     public static void openWidgetSettings() {
@@ -102,6 +107,11 @@ public final class EvoPlusIntegration implements EvoPlusAddon {
                 .duration(Duration.ofMillis(ConfigVisual.goalNoticeDurationMillis())).build();
     }
 
+    public static void notifyFishingGoal(String message) {
+        if (!ConfigFishing.goalNotifications) return;
+        Minecraft.getInstance().execute(() -> EvoPlusApi.showNotification(goalNotification(message)));
+    }
+
     // Separate registration from game state so registration and persistence can be checked without a client.
     public static void registerWidgets(AddonSettings settings, boolean initializeVisibility) {
         var mining = settings.category("mining", "evoassist.page.mining.title");
@@ -129,7 +139,12 @@ public final class EvoPlusIntegration implements EvoPlusAddon {
         additionalWidget(clanGoals, Type.CLAN_POINTS, initializeVisibility);
         additionalWidget(clanGoals, Type.CLAN_GOLD, initializeVisibility);
         additionalWidget(clanGoals, Type.CLAN_EXPERIENCE, initializeVisibility);
-        var chat = settings.category("chat", "evoassist.section.chat");
+        var fishing = settings.category("fishing_goals", "evoassist.page.fishing_goals.title");
+        widget(fishing, "fishing_goal", "fishingGoalWidget", initializeVisibility,
+                () -> inWorld() && FishingInventory.goals().connected() && FishingInventory.goals().ready()
+                        && FishingInventory.goals().goal() != null, EvoPlusIntegration::fishingContent);
+        // Keep the persisted category ID so moving chat into Interface preserves widget geometry.
+        var chat = settings.category("chat", "evoassist.page.interface.title");
         chatTabs = new EvoPlusChatTabs(chat, initializeVisibility, false);
     }
 
@@ -181,6 +196,41 @@ public final class EvoPlusIntegration implements EvoPlusAddon {
                         + "§f\uE135 / §d" + MoneyUtils.convertTo(counter == null ? 0 : counter.ShardsPerHour) + "§f\uE365",
                 mined(counter == null ? 0 : counter.totalBrokenBlocks, counter == null ? 0 : counter.totalMoney,
                         counter == null ? 0 : counter.totalShards));
+    }
+
+    private static EvoPlusWidget.Content fishingContent() {
+        var goals = FishingInventory.goals();
+        var goal = goals.goal();
+        if (goal == null) goal = FishingGoals.Goal.level(FishingData.World.END,
+                FishingData.Rarity.LEGENDARY, 18, 19, 663552);
+        return fishingContent(goal, goals.goal() == null ? 0 : goals.progress());
+    }
+
+    public static EvoPlusWidget.Content fishingContent(FishingGoals.Goal goal, long experience) {
+        String worldColor = switch (goal.world()) {
+            case OVERWORLD -> "§a";
+            case NETHER -> "§c";
+            case END -> "§d";
+        };
+        String worldLabel = goal.world() == FishingData.World.OVERWORLD
+                ? "evoassist.fishing.hud.overworld" : goal.world().label();
+        String world = tr("evoassist.fishing.hud.world", worldColor + tr(worldLabel) + "§f");
+        String inventory = tr("evoassist.fishing.hud.experience", "§b" + experience + "§f", goal.targetExperience());
+        String remaining = tr("evoassist.fishing.remaining", "§6" + Math.max(0, goal.targetExperience() - experience) + "§f");
+        if (goal.mode() == FishingGoals.Mode.LEVEL) {
+            String rarityColor = switch (goal.rarity()) {
+                case COMMON -> "§a";
+                case RARE -> "§e";
+                case LEGENDARY -> "§6";
+            };
+            return content("item/cod", 24,
+                    tr("evoassist.fishing.hud.rarity", rarityColor + tr(goal.rarity().label()) + "§f"),
+                    world,
+                    tr("evoassist.fishing.hud.level", worldColor
+                            + tr("evoassist.fishing.hud.levelValue", goal.targetLevel()) + "§f"),
+                    inventory, remaining);
+        }
+        return content("item/cod", 24, world, inventory, remaining);
     }
 
     private static EvoPlusWidget.Content miningGoalContent(boolean blocks) {

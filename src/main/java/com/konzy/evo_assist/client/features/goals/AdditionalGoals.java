@@ -36,12 +36,11 @@ public final class AdditionalGoals {
         public BigDecimal money = BigDecimal.ZERO;
         public long blocks, shards, activeMillis;
         public boolean complete;
-        private long pendingBlocks;
         public boolean active() { return target.signum() > 0; }
         public boolean running() { return active() && !complete; }
         public boolean hasProgress() {
             return progress.signum() != 0 || money.signum() != 0 || blocks != 0 || shards != 0
-                    || activeMillis != 0 || complete || pendingBlocks != 0;
+                    || activeMillis != 0 || complete;
         }
         public boolean wouldResetProgress(BigDecimal newTarget) {
             return active() && !complete && hasProgress() && target.compareTo(newTarget) != 0;
@@ -50,7 +49,7 @@ public final class AdditionalGoals {
             this.target = target;
             progress = BigDecimal.ZERO;
             money = BigDecimal.ZERO;
-            blocks = shards = activeMillis = pendingBlocks = 0;
+            blocks = shards = activeMillis = 0;
             complete = false;
         }
     }
@@ -155,7 +154,7 @@ public final class AdditionalGoals {
         save();
     }
 
-    public void disconnect() { expirePendingPrices(); save(); connected = false; }
+    public void disconnect() { save(); connected = false; }
 
     private BigDecimal target(Type type) {
         try { return GoalAmount.parse(targets.apply(type), type.whole()).min(type.maximum()); }
@@ -195,11 +194,15 @@ public final class AdditionalGoals {
         }
     }
 
-    public void blockBroken(boolean pendingPrice) {
+    public void confirmedBlock(long money) {
+        blockBroken();
+        moneyEarned(money);
+    }
+
+    public void blockBroken() {
         syncTargets();
         for (Goal goal : mining.values()) if (goal.running()) {
             goal.blocks++;
-            if (pendingPrice) goal.pendingBlocks++;
         }
         savePeriodically();
     }
@@ -212,38 +215,6 @@ public final class AdditionalGoals {
         advance(Type.MONEY, value);
         savePeriodically();
     }
-
-    public void recordBlockReward(long price) {
-        if (price <= 0) return;
-        syncTargets();
-        BigDecimal amount = BigDecimal.valueOf(price);
-        for (Goal goal : mining.values()) {
-            boolean pending = goal.pendingBlocks > 0;
-            if (pending) goal.pendingBlocks--;
-            if (pending || goal.running()) {
-                goal.money = goal.money.add(amount);
-            }
-        }
-        advance(Type.MONEY, amount);
-        savePeriodically();
-    }
-
-    public void recordPendingBlockRewards(long price) {
-        if (price <= 0) return;
-        syncTargets();
-        for (var entry : mining.entrySet()) {
-            Goal goal = entry.getValue();
-            long count = goal.pendingBlocks;
-            goal.pendingBlocks = 0;
-            if (count <= 0) continue;
-            BigDecimal amount = BigDecimal.valueOf(price).multiply(BigDecimal.valueOf(count));
-            goal.money = goal.money.add(amount);
-            if (entry.getKey() == Type.MONEY) advance(Type.MONEY, amount);
-        }
-        savePeriodically();
-    }
-
-    public void expirePendingPrices() { mining.values().forEach(goal -> goal.pendingBlocks = 0); }
 
     public void shardsEarned(long amount) {
         if (amount <= 0) return;

@@ -7,6 +7,8 @@ package com.konzy.evo_assist.client;
 import com.konzy.evo_assist.client.chat.ChatTabManager;
 import com.konzy.evo_assist.client.compat.evoplus.EvoPlusIntegration;
 import com.konzy.evo_assist.client.config.Config;
+import com.konzy.evo_assist.client.config.ConfigFishing;
+import com.konzy.evo_assist.client.features.fishing.FishingInventory;
 import com.konzy.evo_assist.client.event.ChatGameEvent;
 import com.konzy.evo_assist.client.features.mine.blockPH.BlockProfitPerHour;
 import com.konzy.evo_assist.client.features.mine.blockPH.MiningStatistics;
@@ -14,7 +16,6 @@ import com.konzy.evo_assist.client.features.mine.MiningGoals;
 import com.konzy.evo_assist.client.features.rewards.RewardStatistics;
 import com.konzy.evo_assist.client.features.goals.AdditionalGoals;
 import net.fabricmc.loader.api.FabricLoader;
-import com.konzy.evo_assist.client.ui.EvoConfigScreen;
 import com.teamresourceful.resourcefulconfig.api.loader.Configurator;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommands;
@@ -61,6 +62,7 @@ public class EvoAssistClient implements ClientModInitializer {
         evoClient = this;
 
         configurator.register(Config.class);
+        ConfigFishing.normalize();
         if (AdditionalGoals.normalizeConfiguredTargets()) configurator.saveConfig(Config.class);
         rewardStatistics = new RewardStatistics(
                 FabricLoader.getInstance().getConfigDir().resolve("evoassist_rewards.properties"),
@@ -79,8 +81,9 @@ public class EvoAssistClient implements ClientModInitializer {
         eventBlockProfitPerHour = new BlockProfitPerHour(new MiningStatistics(
                 FabricLoader.getInstance().getConfigDir().resolve("evoassist_mining.properties"),
                 error -> logger.warn("Could not update mining statistics", error)));
+        ClientPlayerBlockBreakEvents.AFTER.register((level, player, pos, state) ->
+                eventBlockProfitPerHour.localBlockBreak(pos));
         eventChatGame = new ChatGameEvent();
-        ClientPlayerBlockBreakEvents.AFTER.register(eventBlockProfitPerHour);
         ClientReceiveMessageEvents.GAME.register(eventChatGame);
         ClientPlayConnectionEvents.JOIN.register((_, _, client) -> {
             var server = client.getCurrentServer();
@@ -89,7 +92,7 @@ public class EvoAssistClient implements ClientModInitializer {
                             net.minecraft.world.level.storage.LevelResource.ROOT).toAbsolutePath().normalize()
                     : "";
             eventBlockProfitPerHour.connect(miningServer);
-            MiningGoals.getInstance().expirePendingPrices();
+            FishingInventory.connect(miningServer);
             if (server != null) {
                 rewardStatistics.connect(server.ip);
                 AdditionalGoals.getInstance().connect(server.ip);
@@ -97,9 +100,9 @@ public class EvoAssistClient implements ClientModInitializer {
         });
         ClientPlayConnectionEvents.DISCONNECT.register((_, _) -> {
             eventBlockProfitPerHour.disconnect();
+            FishingInventory.disconnect();
             rewardStatistics.disconnect();
             AdditionalGoals.getInstance().disconnect();
-            MiningGoals.getInstance().expirePendingPrices();
             MiningGoals.getInstance().save();
         });
 
@@ -107,11 +110,11 @@ public class EvoAssistClient implements ClientModInitializer {
 
         ClientCommandRegistrationCallback.EVENT.register(((commandDispatcher, commandRegistryAccess) -> {
             commandDispatcher.register(ClientCommands.literal("evoassist").executes(commandContext -> {
-                instance.schedule(() -> instance.gui.setScreen(new EvoConfigScreen(instance.gui.screen())));
+                instance.schedule(EvoPlusIntegration::openWidgetSettings);
                 return 1;
             }));
             commandDispatcher.register(ClientCommands.literal("ea").executes(commandContext -> {
-                instance.schedule(() -> instance.gui.setScreen(new EvoConfigScreen(instance.gui.screen())));
+                instance.schedule(EvoPlusIntegration::openWidgetSettings);
                 return 1;
             }));
             commandDispatcher.register(ClientCommands.literal("evoassistwidgets").executes(commandContext -> {
@@ -126,7 +129,9 @@ public class EvoAssistClient implements ClientModInitializer {
 
         AtomicLong latestSecond = new AtomicLong(System.currentTimeMillis());
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
+            FishingInventory.tick(client);
             EvoPlusIntegration.savePendingWidgetMigration();
+            eventBlockProfitPerHour.expirePendingBreaks();
             EvoPlusIntegration.syncChatVisibility();
             if (!chatFilterInstalled) {
                 client.gui.hud.getChat().setVisibleMessageFilter(message ->
@@ -142,7 +147,7 @@ public class EvoAssistClient implements ClientModInitializer {
 
 
             while (ConfigBind.consumeClick()) {
-                instance.gui.setScreen(new EvoConfigScreen(instance.gui.screen()));
+                EvoPlusIntegration.openWidgetSettings();
             }
 
         });
