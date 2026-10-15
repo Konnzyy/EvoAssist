@@ -19,7 +19,7 @@ import java.util.function.Consumer;
 public final class RewardStatistics {
     public static final class Totals {
         public BigDecimal money = BigDecimal.ZERO;
-        public long shards, tokens, infernalTokens, endTokens, clanPoints, clanExperience, clanGold;
+        public long shards, tokens, infernalTokens, endTokens, clanPoints, clanExperience, clanGold, kills;
     }
 
     private final Path file;
@@ -66,6 +66,8 @@ public final class RewardStatistics {
         return totals.clanPoints != 0 || totals.clanExperience != 0 || totals.clanGold != 0;
     }
 
+    public boolean hasKillStatistics() { return hasServer() && current().kills > 0; }
+
     public void connect(String address) {
         currentServer = address.strip().toLowerCase(Locale.ROOT);
         if (currentServer.endsWith(":25565")) currentServer = currentServer.substring(0, currentServer.length() - 6);
@@ -83,6 +85,13 @@ public final class RewardStatistics {
         if (!connected) return;
         boolean changed = false;
         for (String line : message.split("\\R")) {
+            if (PlayerKillParser.parse(line).isPresent()) {
+                try {
+                    current().kills = Math.addExact(current().kills, 1);
+                    changed = true;
+                } catch (ArithmeticException error) { reportError.accept(error); }
+                continue;
+            }
             var reward = RewardMessageParser.parse(line);
             if (reward.isEmpty()) continue;
             try {
@@ -129,6 +138,12 @@ public final class RewardStatistics {
         save();
     }
 
+    public void resetKills() {
+        if (!hasServer()) return;
+        current().kills = 0;
+        save();
+    }
+
     public void resetClan() {
         if (!hasServer()) return;
         Totals totals = current();
@@ -155,12 +170,13 @@ public final class RewardStatistics {
             values.setProperty(prefix + "clanPoints", Long.toString(totals.clanPoints));
             values.setProperty(prefix + "clanExperience", Long.toString(totals.clanExperience));
             values.setProperty(prefix + "clanGold", Long.toString(totals.clanGold));
+            values.setProperty(prefix + "kills", Long.toString(totals.kills));
         }
         try {
             Files.createDirectories(file.getParent());
             Path temporary = file.resolveSibling(file.getFileName() + ".tmp");
             try (OutputStream out = Files.newOutputStream(temporary)) {
-                values.store(out, "EvoAssist boss and clan rewards by server");
+                values.store(out, "EvoAssist rewards and kills by server");
             }
             try {
                 Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
@@ -191,6 +207,7 @@ public final class RewardStatistics {
                     totals.clanPoints = nonnegative(values, prefix + "clanPoints");
                     totals.clanExperience = nonnegative(values, prefix + "clanExperience");
                     totals.clanGold = nonnegative(values, prefix + "clanGold");
+                    totals.kills = nonnegative(values, prefix + "kills");
                     servers.put(values.getProperty(key), totals);
                 } catch (NumberFormatException error) {
                     reportError.accept(error);

@@ -12,10 +12,10 @@ import com.teamresourceful.resourcefulconfig.api.annotations.*;
 @com.teamresourceful.resourcefulconfig.api.annotations.Config(
         value = EvoAssistClient.MODID,
         categories = {
-                ConfigAutoclicker.class,
                 ConfigMining.class,
                 ConfigBosses.class,
                 ConfigClan.class,
+                ConfigCalculator.class,
                 ConfigChat.class,
                 ConfigVisual.class,
                 HudConfig.class

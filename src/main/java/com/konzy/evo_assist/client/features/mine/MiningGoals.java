@@ -2,9 +2,8 @@ package com.konzy.evo_assist.client.features.mine;
 
 import static com.konzy.evo_assist.client.util.Texts.tr;
 import com.konzy.evo_assist.client.EvoAssistClient;
+import com.konzy.evo_assist.client.compat.evoplus.EvoPlusIntegration;
 import com.konzy.evo_assist.client.config.ConfigMining;
-import com.konzy.evo_assist.client.config.ConfigClan;
-import com.konzy.evo_assist.client.config.ConfigVisual;
 import com.konzy.evo_assist.client.features.goals.AdditionalGoals;
 import com.konzy.evo_assist.client.util.TimeUtils;
 import net.fabricmc.loader.api.FabricLoader;
@@ -17,7 +16,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Properties;
 import java.util.Locale;
-import java.util.ArrayDeque;
 
 public final class MiningGoals {
     public static final class Goal {
@@ -55,11 +53,6 @@ public final class MiningGoals {
     private final Goal blocks = new Goal();
     private final Goal time = new Goal();
     private long lastSave;
-    private String notice;
-    private boolean clanNotice;
-    private record Notice(String message, boolean clan) {}
-    private final ArrayDeque<Notice> pendingNotices = new ArrayDeque<>();
-    private long noticeUntil;
 
     private MiningGoals() {
         load();
@@ -74,12 +67,6 @@ public final class MiningGoals {
     public Goal blockGoal() { return blocks; }
     public Goal timeGoal() { return time; }
     public boolean hasProgress() { return blocks.hasProgress() || time.hasProgress(); }
-
-    public String previewNotice() {
-        if (blocks.active()) return blockNotice(blocks.target);
-        if (time.active()) return timeNotice(time.target);
-        return blockNotice(10_000);
-    }
 
     private static String blockNotice(int target) {
         String amount = String.format(Locale.ROOT, "%,d", target).replace(',', ' ');
@@ -109,7 +96,6 @@ public final class MiningGoals {
     public void resetAll() {
         blocks.reset(Math.max(0, ConfigMining.blockGoalTarget));
         time.reset(Math.max(0, ConfigMining.timeGoalMinutes));
-        clearNotices(false);
         AdditionalGoals.getInstance().reset(false);
         save();
     }
@@ -206,40 +192,8 @@ public final class MiningGoals {
         save();
     }
 
-    public String currentNotice() {
-        if (System.currentTimeMillis() >= noticeUntil) notice = null;
-        if (notice != null && !(clanNotice ? ConfigClan.goalNotifications : ConfigMining.goalNotifications)) notice = null;
-        while (notice == null && !pendingNotices.isEmpty()) {
-            Notice next = pendingNotices.removeFirst();
-            if (next.clan ? ConfigClan.goalNotifications : ConfigMining.goalNotifications) {
-                notice = next.message;
-                clanNotice = next.clan;
-                noticeUntil = System.currentTimeMillis() + ConfigVisual.goalNoticeDurationMillis();
-            }
-        }
-        return (clanNotice ? ConfigClan.goalNotifications : ConfigMining.goalNotifications)
-                && notice != null && System.currentTimeMillis() < noticeUntil
-                ? notice : null;
-    }
-
     public void showNotice(String message, boolean clan) {
-        if (notice != null && System.currentTimeMillis() < noticeUntil) {
-            pendingNotices.addLast(new Notice(message, clan));
-            return;
-        }
-        if (!pendingNotices.isEmpty()) {
-            pendingNotices.addLast(new Notice(message, clan));
-            currentNotice();
-            return;
-        }
-        notice = message;
-        clanNotice = clan;
-        noticeUntil = System.currentTimeMillis() + ConfigVisual.goalNoticeDurationMillis();
-    }
-
-    public void clearNotices(boolean clan) {
-        pendingNotices.removeIf(item -> item.clan == clan);
-        if (clanNotice == clan) { notice = null; noticeUntil = 0; }
+        EvoPlusIntegration.notifyGoal(message, clan);
     }
 
     private void savePeriodically() {

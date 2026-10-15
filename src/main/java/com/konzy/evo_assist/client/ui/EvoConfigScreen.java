@@ -4,17 +4,16 @@ import static com.konzy.evo_assist.client.util.Texts.tr;
 
 import com.konzy.evo_assist.client.EvoAssistClient;
 import com.konzy.evo_assist.client.config.Config;
+import com.konzy.evo_assist.client.config.ConfigCalculator;
+import com.konzy.evo_assist.client.features.calculator.LevelCalculator;
 import com.konzy.evo_assist.client.features.goals.AdditionalGoals;
 import com.konzy.evo_assist.client.util.GoalAmount;
 import com.konzy.evo_assist.client.util.TimeUtils;
 import com.konzy.evo_assist.client.features.rewards.RewardMessageParser;
-import com.konzy.evo_assist.client.config.ConfigAutoclicker;
 import com.konzy.evo_assist.client.config.ConfigChat;
 import com.konzy.evo_assist.client.config.ConfigMining;
 import com.konzy.evo_assist.client.config.ConfigVisual;
-import com.konzy.evo_assist.client.config.ConfigBosses;
 import com.konzy.evo_assist.client.config.ConfigClan;
-import com.konzy.evo_assist.client.features.autoclicker.Clicker;
 import com.konzy.evo_assist.client.features.mine.blockPH.BlockProfitPerHour;
 import com.konzy.evo_assist.client.features.mine.MiningGoals;
 import com.mojang.blaze3d.platform.InputConstants;
@@ -51,13 +50,14 @@ public class EvoConfigScreen extends Screen {
 
     private final Screen parent;
     private final String modVersion;
-    private Page page = Page.AUTOCLICKER;
+    private Page page = Page.MINING;
     private int scroll;
     private Row draggingSlider;
     private String openDropdown;
     private String capturingKeyId;
     private String editingId;
     private String editingText = "";
+    private boolean calculatorSelectAll;
     private String feedback;
     private long feedbackUntil;
     private String resetFlashId;
@@ -73,12 +73,13 @@ public class EvoConfigScreen extends Screen {
     private float hoverStep = 1.0f;
 
     private enum Page {
-        AUTOCLICKER("evoassist.page.autoclicker.title", "evoassist.page.autoclicker.subtitle"),
         BOSSES("evoassist.page.bosses.title", "evoassist.page.bosses.subtitle"),
+        KILLS("evoassist.page.kills.title", "evoassist.page.kills.subtitle"),
         MINING("evoassist.page.mining.title", "evoassist.page.mining.subtitle"),
         MINING_GOALS("evoassist.page.mining_goals.title", "evoassist.page.mining_goals.subtitle"),
         CLAN("evoassist.page.clan.title", "evoassist.page.clan.subtitle"),
         CLAN_GOALS("evoassist.page.clan_goals.title", "evoassist.page.clan_goals.subtitle"),
+        CALCULATOR("evoassist.page.calculator.title", "evoassist.page.calculator.subtitle"),
         INTERFACE("evoassist.page.interface.title", "evoassist.page.interface.subtitle");
 
         final String title;
@@ -90,7 +91,7 @@ public class EvoConfigScreen extends Screen {
         }
     }
 
-    private enum Kind { TOGGLE, CHOICE, MULTI, SLIDER, CPS, NUMBER, AMOUNT, KEY, ACTION, EDITOR, SECTION }
+    private enum Kind { TOGGLE, CHOICE, MULTI, SLIDER, NUMBER, AMOUNT, KEY, ACTION, SECTION, LEVELS, RESULT, INFO }
 
     private record DropdownOption(String id, String title) {}
     private record DropdownBounds(int x, int y, int width, int height) {}
@@ -117,9 +118,6 @@ public class EvoConfigScreen extends Screen {
         static Row action(String id, String title, String hint) {
             return new Row(id, title, hint, Kind.ACTION, 0, 0);
         }
-        static Row editor(String id, String title, String hint) {
-            return new Row(id, title, hint, Kind.EDITOR, 0, 0);
-        }
     }
 
     public EvoConfigScreen(Screen parent) {
@@ -135,82 +133,71 @@ public class EvoConfigScreen extends Screen {
     private List<Row> rows() {
         List<Row> items = new ArrayList<>();
         switch (page) {
-            case AUTOCLICKER -> {
-                items.add(Row.toggle("clickerEnabled", tr("evoassist.ui.clickerEnabled.title"), tr("evoassist.ui.clickerEnabled.hint")));
-                items.add(Row.choice("clickerButton", tr("evoassist.ui.clickerButton.title"), tr("evoassist.ui.clickerButton.hint")));
-                items.add(Row.choice("clickerMode", tr("evoassist.ui.clickerMode.title"), tr("evoassist.ui.clickerMode.hint")));
-                items.add(new Row("clickerKey", tr("evoassist.ui.clickerKey.title"), tr("evoassist.ui.key.hint"), Kind.KEY, 0, 0));
-                items.add(new Row("clickerModeKey", tr("evoassist.ui.clickerModeKey.title"), tr("evoassist.ui.key.hint"), Kind.KEY, 0, 0));
-                items.add(new Row("cps", tr("evoassist.ui.cps.title"), tr("evoassist.ui.cps.hint"), Kind.CPS, 1, 20));
-            }
             case MINING -> {
-                items.add(Row.toggle("miningWidget", tr("evoassist.ui.miningWidget.title"), tr("evoassist.ui.miningWidget.hint")));
                 items.add(new Row("allowed", tr("evoassist.ui.allowed.title"), tr("evoassist.ui.allowed.hint"), Kind.MULTI, 0, 0));
                 items.add(Row.action("resetMining", tr("evoassist.ui.resetMining.title"), tr("evoassist.ui.resetMining.hint")));
-                items.add(Row.editor("editMining", tr("evoassist.ui.editor.title"), tr("evoassist.ui.editor.hint")));
             }
             case MINING_GOALS -> {
                 items.add(Row.section(tr("evoassist.section.blocks")));
-                items.add(Row.toggle("blockGoalWidget", tr("evoassist.ui.blockGoalWidget.title"), tr("evoassist.ui.blockGoalWidget.hint")));
                 items.add(Row.number("blockGoal", tr("evoassist.ui.blockGoal.title"), tr("evoassist.ui.blockGoal.hint"), 0, 9_999_999));
-                items.add(Row.editor("editBlockGoal", tr("evoassist.ui.editor.title"), tr("evoassist.ui.editor.hint")));
+                items.add(Row.action("blockGoal", tr("evoassist.ui.reset.blockGoal.title"), tr("evoassist.ui.resetGoal.hint")));
                 items.add(Row.section(tr("evoassist.section.time")));
-                items.add(Row.toggle("timeGoalWidget", tr("evoassist.ui.timeGoalWidget.title"), tr("evoassist.ui.timeGoalWidget.hint")));
                 items.add(Row.number("timeGoal", tr("evoassist.ui.timeGoal.title"), tr("evoassist.ui.timeGoal.hint"), 0, 9_999));
-                items.add(Row.editor("editTimeGoal", tr("evoassist.ui.editor.title"), tr("evoassist.ui.editor.hint")));
+                items.add(Row.action("timeGoal", tr("evoassist.ui.reset.timeGoal.title"), tr("evoassist.ui.resetGoal.hint")));
                 items.add(Row.section(tr("evoassist.section.money")));
-                items.add(Row.toggle("moneyGoalWidget", tr("evoassist.ui.moneyGoalWidget.title"), tr("evoassist.ui.moneyGoalWidget.hint")));
                 items.add(Row.amount("moneyGoal", tr("evoassist.ui.moneyGoal.title"), tr("evoassist.ui.moneyGoal.hint")));
-                items.add(Row.editor("editMoneyGoal", tr("evoassist.ui.editor.title"), tr("evoassist.ui.editor.hint")));
+                items.add(Row.action("moneyGoal", tr("evoassist.ui.reset.moneyGoal.title"), tr("evoassist.ui.resetGoal.hint")));
                 items.add(Row.section(tr("evoassist.section.shards")));
-                items.add(Row.toggle("shardGoalWidget", tr("evoassist.ui.shardGoalWidget.title"), tr("evoassist.ui.shardGoalWidget.hint")));
                 items.add(Row.amount("shardGoal", tr("evoassist.ui.shardGoal.title"), tr("evoassist.ui.shardGoal.hint")));
-                items.add(Row.editor("editShardGoal", tr("evoassist.ui.editor.title"), tr("evoassist.ui.editor.hint")));
+                items.add(Row.action("shardGoal", tr("evoassist.ui.reset.shardGoal.title"), tr("evoassist.ui.resetGoal.hint")));
                 items.add(Row.section(tr("evoassist.section.general")));
                 items.add(Row.toggle("goalNotifications", tr("evoassist.ui.goalNotifications.title"), tr("evoassist.ui.goalNotifications.hint")));
                 items.add(Row.slider("goalNoticeDuration", tr("evoassist.ui.goalNoticeDuration.title"), tr("evoassist.ui.goalNoticeDuration.hint"), 1, 60));
-                items.add(Row.editor("editGoalNotice", tr("evoassist.ui.editor.title"), tr("evoassist.ui.editor.hint")));
                 items.add(Row.action("resetGoals", tr("evoassist.ui.resetGoals.title"), tr("evoassist.ui.resetGoals.hint")));
             }
             case BOSSES -> {
                 items.add(Row.section(tr("evoassist.section.bossRewards")));
-                items.add(Row.toggle("bossWidget", tr("evoassist.ui.bossWidget.title"), tr("evoassist.ui.bossWidget.hint")));
                 items.add(Row.action("resetBossRewards", tr("evoassist.ui.resetRewards.title"), tr("evoassist.ui.resetBossRewards.hint")));
-                items.add(Row.editor("editBosses", tr("evoassist.ui.editor.title"), tr("evoassist.ui.editor.hint")));
                 items.add(Row.section(tr("evoassist.section.bossTokens")));
-                items.add(Row.toggle("bossTokensWidget", tr("evoassist.ui.bossTokensWidget.title"), tr("evoassist.ui.bossTokensWidget.hint")));
                 items.add(Row.action("resetBossTokens", tr("evoassist.ui.resetRewards.title"), tr("evoassist.ui.resetBossTokens.hint")));
-                items.add(Row.editor("editBossTokens", tr("evoassist.ui.editor.title"), tr("evoassist.ui.editor.hint")));
             }
             case CLAN -> {
-                items.add(Row.toggle("clanWidget", tr("evoassist.ui.clanWidget.title"), tr("evoassist.ui.clanWidget.hint")));
                 items.add(Row.action("resetClan", tr("evoassist.ui.resetRewards.title"), tr("evoassist.ui.resetClan.hint")));
-                items.add(Row.editor("editClan", tr("evoassist.ui.editor.title"), tr("evoassist.ui.editor.hint")));
             }
             case CLAN_GOALS -> {
                 items.add(Row.section(tr("evoassist.section.clanPoints")));
-                items.add(Row.toggle("clanPointsGoalWidget", tr("evoassist.ui.clanPointsGoalWidget.title"), tr("evoassist.ui.clanPointsGoalWidget.hint")));
                 items.add(Row.amount("clanPointsGoal", tr("evoassist.ui.clanPointsGoal.title"), tr("evoassist.ui.clanPointsGoal.hint")));
-                items.add(Row.editor("editClanPointsGoal", tr("evoassist.ui.editor.title"), tr("evoassist.ui.editor.hint")));
+                items.add(Row.action("clanPointsGoal", tr("evoassist.ui.reset.clanPointsGoal.title"), tr("evoassist.ui.resetGoal.hint")));
                 items.add(Row.section(tr("evoassist.section.clanGold")));
-                items.add(Row.toggle("clanGoldGoalWidget", tr("evoassist.ui.clanGoldGoalWidget.title"), tr("evoassist.ui.clanGoldGoalWidget.hint")));
                 items.add(Row.amount("clanGoldGoal", tr("evoassist.ui.clanGoldGoal.title"), tr("evoassist.ui.clanGoldGoal.hint")));
-                items.add(Row.editor("editClanGoldGoal", tr("evoassist.ui.editor.title"), tr("evoassist.ui.editor.hint")));
+                items.add(Row.action("clanGoldGoal", tr("evoassist.ui.reset.clanGoldGoal.title"), tr("evoassist.ui.resetGoal.hint")));
                 items.add(Row.section(tr("evoassist.section.clanExperience")));
-                items.add(Row.toggle("clanExperienceGoalWidget", tr("evoassist.ui.clanExperienceGoalWidget.title"), tr("evoassist.ui.clanExperienceGoalWidget.hint")));
                 items.add(Row.amount("clanExperienceGoal", tr("evoassist.ui.clanExperienceGoal.title"), tr("evoassist.ui.clanExperienceGoal.hint")));
-                items.add(Row.editor("editClanExperienceGoal", tr("evoassist.ui.editor.title"), tr("evoassist.ui.editor.hint")));
+                items.add(Row.action("clanExperienceGoal", tr("evoassist.ui.reset.clanExperienceGoal.title"), tr("evoassist.ui.resetGoal.hint")));
                 items.add(Row.section(tr("evoassist.section.general")));
                 items.add(Row.toggle("clanGoalNotifications", tr("evoassist.ui.goalNotifications.title"), tr("evoassist.ui.clanGoalNotifications.hint")));
                 items.add(Row.slider("goalNoticeDuration", tr("evoassist.ui.goalNoticeDuration.title"), tr("evoassist.ui.goalNoticeDuration.hint"), 1, 60));
-                items.add(Row.editor("editClanGoalNotice", tr("evoassist.ui.editor.title"), tr("evoassist.ui.editor.hint")));
                 items.add(Row.action("resetClanGoals", tr("evoassist.ui.resetGoals.title"), tr("evoassist.ui.resetClanGoals.hint")));
+            }
+            case CALCULATOR -> {
+                items.add(Row.choice("calculatorMode", tr("evoassist.calculator.mode"), tr("evoassist.calculator.modeHint")));
+                items.add(new Row("calculatorLevels", "", "", Kind.LEVELS, 1, LevelCalculator.MAX_LEVEL));
+                items.add(Row.choice("calculatorDiscount", tr("evoassist.calculator.discount"), tr("evoassist.calculator.discountHint")));
+                items.add(Row.section(tr("evoassist.calculator.result")));
+                String error = calculatorError();
+                if (error != null) items.add(new Row("calculatorStatus", error, "", Kind.INFO, 0, 0));
+                else {
+                    items.add(new Row("calculatorDifference", tr("evoassist.calculator.difference"), "", Kind.RESULT, 0, 0));
+                    items.add(new Row("calculatorBlocks", tr("evoassist.calculator.blocks"), "", Kind.RESULT, 0, 0));
+                    items.add(new Row("calculatorMoney", tr("evoassist.calculator.money"), "", Kind.RESULT, 0, 0));
+                }
+            }
+            case KILLS -> {
+                items.add(Row.action("resetKills", tr("evoassist.ui.resetKills.title"), tr("evoassist.ui.resetKills.hint")));
             }
             case INTERFACE -> {
                 items.add(Row.section(tr("evoassist.section.chat")));
-                items.add(Row.toggle("chatTabs", tr("evoassist.ui.chatTabs.title"), tr("evoassist.ui.chatTabs.hint")));
                 items.add(Row.choice("chatOrientation", tr("evoassist.ui.chatOrientation.title"), tr("evoassist.ui.chatOrientation.hint")));
-                items.add(Row.editor("editChatTabs", tr("evoassist.ui.editor.title"), tr("evoassist.ui.editor.hint")));
                 items.add(Row.section(tr("evoassist.section.menu")));
                 items.add(new Row("menuKey", tr("evoassist.ui.menuKey.title"), tr("evoassist.ui.key.hint"), Kind.KEY, 0, 0));
                 items.add(Row.slider("menuOpacity", tr("evoassist.ui.menuOpacity.title"), tr("evoassist.ui.menuOpacity.hint"), 10, 100));
@@ -234,6 +221,9 @@ public class EvoConfigScreen extends Screen {
     private int navHeight() { return Math.min(24, navStep() - 2); }
     private int rowHeight(Row row) {
         if (row.kind == Kind.SECTION) return 24;
+        if (row.kind == Kind.LEVELS) return cardWidth() < 280 ? 106 : 64;
+        if (row.kind == Kind.RESULT) return narrow() ? 46 : 32;
+        if (row.kind == Kind.INFO) return 69;
         return contentWidth() < 340 ? 69 : 56;
     }
     private int rowStep(Row row) { return rowHeight(row) + 7; }
@@ -319,7 +309,6 @@ public class EvoConfigScreen extends Screen {
 
         g.text(font, "EvoAssist", left() + 12, top() + 11, TEXT);
         g.text(font, modVersion, left() + 12, top() + 26, MUTED);
-        renderWidgetEditorButton(g, mouseX, mouseY);
 
         int navY = top() + 48;
         for (Page item : Page.values()) {
@@ -366,7 +355,7 @@ public class EvoConfigScreen extends Screen {
 
         surface(g, contentX(), contentBottom() + 3, right(), bottom(), PANEL);
         String footer = feedback != null && System.currentTimeMillis() < feedbackUntil
-                ? feedback : tr("evoassist.ui.saveHint");
+                ? feedback : tr(page == Page.CALCULATOR ? "evoassist.calculator.auto" : "evoassist.ui.saveHint");
         g.text(font, fit(footer, contentWidth() - 90), contentX() + 10, bottom() - 22, MUTED);
         renderControl(g, "done", right() - 69, bottom() - 31, 60, 24, mouseX, mouseY);
         g.centeredText(font, tr("evoassist.ui.done"), right() - 39, bottom() - 23, TEXT);
@@ -382,36 +371,23 @@ public class EvoConfigScreen extends Screen {
     private int controlY(int rowY) { return narrow() ? rowY + 37 : rowY + 16; }
     private int resetX() { return controlX() + controlWidth() - 39; }
     private int valueX() { return resetX() - 44; }
-    private int sliderStart(Row row) { return controlX() + (row.kind == Kind.CPS ? font.width("1") + 10 : 0); }
+    private int sliderStart(Row row) { return controlX(); }
     private int sliderWidth(Row row) {
         int rightEdge = valueX() - 8;
-        if (row.kind == Kind.CPS) rightEdge -= font.width("20") + 10;
         return Math.max(20, rightEdge - sliderStart(row));
     }
     private int comboWidth() { return Math.min(130, controlWidth()); }
     private int comboX() { return controlX() + controlWidth() - comboWidth(); }
-    private int widgetEditorButtonX() { return left() + sidebarWidth() - 28; }
-    private int widgetEditorButtonY() { return top() + 8; }
 
-    private void renderWidgetEditorButton(GuiGraphicsExtractor g, int mouseX, int mouseY) {
-        int x = widgetEditorButtonX();
-        int y = widgetEditorButtonY();
-        boolean hover = inside(mouseX, mouseY, x, y, 20, 20);
-        float amount = hoverAmount("widgetEditor", hover);
-        surface(g, x, y, x + 20, y + 20, mixColor(0xFF82909B, ACCENT, amount));
-        surface(g, x + 1, y + 1, x + 19, y + 19, mixColor(CONTROL, CARD_HOVER, amount));
-        surface(g, x + 9, y + 4, x + 11, y + 16, TEXT);
-        surface(g, x + 4, y + 9, x + 16, y + 11, TEXT);
-        if (hover) g.text(font, fit(tr("evoassist.ui.widgetSettings"), sidebarWidth() - 16), left() + 8, top() + 37, TEXT);
-    }
 
     private List<DropdownOption> dropdownOptions() {
         if (openDropdown == null) return List.of();
         return switch (openDropdown) {
-            case "clickerButton" -> List.of(new DropdownOption("buttonLeft", tr("evoassist.ui.leftMouse")),
-                    new DropdownOption("buttonRight", tr("evoassist.ui.rightMouse")));
-            case "clickerMode" -> List.of(new DropdownOption("modeClick", tr("evoassist.ui.clickMode")),
-                    new DropdownOption("modeHold", tr("evoassist.ui.holdMode")));
+            case "calculatorMode" -> List.of(new DropdownOption("calculatorModeEvo", "Evo"),
+                    new DropdownOption("calculatorModeEvoFast", "Evo Fast"));
+            case "calculatorDiscount" -> LevelCalculator.discounts(calculatorLevel("calculatorTarget")).stream()
+                    .map(percent -> new DropdownOption("calculatorDiscount" + percent,
+                            percent == 0 ? tr("evoassist.calculator.noDiscount") : percent + "%")).toList();
             case "chatOrientation" -> List.of(new DropdownOption("chatHorizontal", tr("evoassist.ui.horizontal")),
                     new DropdownOption("chatVertical", tr("evoassist.ui.vertical")));
             case "allowed" -> List.of(new DropdownOption("allowBlocks", tr("evoassist.ui.blocks")),
@@ -480,6 +456,33 @@ public class EvoConfigScreen extends Screen {
         surface(g, cardX(), y, cardX() + cardWidth(), y + rowH, hover ? CARD_HOVER : CARD);
         surface(g, cardX(), y, cardX() + 2, y + rowH, hover ? ACCENT : 0xFF8A98A5);
 
+        if (row.kind == Kind.LEVELS) {
+            renderCalculatorInput(g, "calculatorCurrent", tr("evoassist.calculator.currentLevel"), y, mouseX, mouseY);
+            renderCalculatorInput(g, "calculatorTarget", tr("evoassist.calculator.targetLevel"), y, mouseX, mouseY);
+            return;
+        }
+        if (row.kind == Kind.INFO) {
+            int textY = y + 12;
+            for (var line : font.split(Component.literal(row.title), cardWidth() - 24)) {
+                g.text(font, line, cardX() + 12, textY, MUTED);
+                textY += font.lineHeight;
+            }
+            return;
+        }
+        if (row.kind == Kind.RESULT) {
+            String shown = resultLabel(row.id);
+            int color = row.id.equals("calculatorMoney") ? 0xFF55FF55 : ACCENT;
+            if (narrow()) {
+                g.text(font, fit(row.title, cardWidth() - 24), cardX() + 12, y + 8, MUTED);
+                g.text(font, shown, cardX() + 12, y + 25, color);
+            } else {
+                int valueWidth = font.width(shown);
+                g.text(font, fit(row.title, cardWidth() - valueWidth - 36), cardX() + 12, y + 12, MUTED);
+                g.text(font, shown, cardX() + cardWidth() - valueWidth - 12, y + 12, color);
+            }
+            return;
+        }
+
         int labelWidth = narrow() ? cardWidth() - 24 : controlX() - cardX() - 22;
         g.text(font, fit(row.title, labelWidth), cardX() + 12, y + 11, TEXT);
         if (!narrow()) {
@@ -489,7 +492,7 @@ public class EvoConfigScreen extends Screen {
         int cx = controlX();
         int cw = controlWidth();
 
-        if (row.kind == Kind.SLIDER || row.kind == Kind.CPS) {
+        if (row.kind == Kind.SLIDER) {
             int current = value(row.id);
             int trackX = sliderStart(row);
             int trackWidth = sliderWidth(row);
@@ -502,20 +505,15 @@ public class EvoConfigScreen extends Screen {
             String shown = row.id.equals(editingId) ? editingText + "_" : Integer.toString(current);
             g.centeredText(font, fit(shown, 36), valueX() + 20, cy + 5, TEXT);
             renderReset(g, row.id, cy, mouseX, mouseY);
-            if (row.kind == Kind.CPS) {
-                g.text(font, "1", cx, cy + 5, MUTED);
-                g.text(font, "20", trackX + trackWidth + 10, cy + 5, MUTED);
-            }
             return;
         }
 
         if (row.kind == Kind.NUMBER || row.kind == Kind.AMOUNT) {
-            int boxX = cx + cw - 110;
-            renderControl(g, "value:" + row.id, boxX, cy - 2, 68, 22, mouseX, mouseY);
+            int boxX = cx;
+            renderControl(g, "value:" + row.id, boxX, cy - 2, cw, 22, mouseX, mouseY);
             String shown = row.id.equals(editingId) ? editingText + "_"
                     : row.kind == Kind.AMOUNT ? amountLabel(row.id) : Integer.toString(value(row.id));
-            g.centeredText(font, fit(shown, 62), boxX + 34, cy + 5, TEXT);
-            renderReset(g, row.id, cy, mouseX, mouseY);
+            g.centeredText(font, fit(shown, cw - 8), boxX + cw / 2, cy + 5, TEXT);
             return;
         }
 
@@ -525,13 +523,6 @@ public class EvoConfigScreen extends Screen {
         }
         if (row.kind == Kind.ACTION) {
             renderResetButton(g, row.id, cx, cy - 2, cw, tr("evoassist.ui.resetAction"), mouseX, mouseY);
-            return;
-        }
-        if (row.kind == Kind.EDITOR) {
-            boolean active = editorEnabled(row.id);
-            renderControl(g, "editor:" + row.id, cx, cy - 2, cw, 22, mouseX, mouseY, active);
-            g.centeredText(font, tr("evoassist.ui.configure"), cx + cw / 2, cy + 5,
-                    active ? TEXT : 0xFF7D8993);
             return;
         }
 
@@ -560,6 +551,78 @@ public class EvoConfigScreen extends Screen {
         surface(g, x + 1, y + 1, x + 31, y + 13, enabled ? 0xFF2984C7 : 0xFF34414D);
         int handleX = enabled ? x + 19 : x + 2;
         surface(g, handleX, y + 2, handleX + 11, y + 12, 0xFFE8F4FC);
+    }
+
+    private static boolean calculatorInput(String id) {
+        return "calculatorCurrent".equals(id) || "calculatorTarget".equals(id);
+    }
+
+    private String calculatorText(String id) {
+        if (id.equals(editingId)) return editingText;
+        return id.equals("calculatorCurrent") ? ConfigCalculator.currentLevel : ConfigCalculator.targetLevel;
+    }
+
+    private int calculatorLevel(String id) {
+        try { return Integer.parseInt(calculatorText(id)); }
+        catch (NumberFormatException error) { return 0; }
+    }
+
+    private int calculatorDiscount() {
+        return LevelCalculator.discounts(calculatorLevel("calculatorTarget")).contains(ConfigCalculator.discount)
+                ? ConfigCalculator.discount : 0;
+    }
+
+    private static LevelCalculator.Mode calculatorMode() {
+        return ConfigCalculator.mode == null ? LevelCalculator.Mode.EVO : ConfigCalculator.mode;
+    }
+
+    private String calculatorError() {
+        if (calculatorText("calculatorCurrent").isEmpty() || calculatorText("calculatorTarget").isEmpty())
+            return tr("evoassist.calculator.enterLevels");
+        if (!LevelCalculator.validLevel(calculatorLevel("calculatorCurrent"))
+                || !LevelCalculator.validLevel(calculatorLevel("calculatorTarget")))
+            return tr("evoassist.calculator.levelRange");
+        if (calculatorLevel("calculatorTarget") <= calculatorLevel("calculatorCurrent"))
+            return tr("evoassist.calculator.targetHigher");
+        return null;
+    }
+
+    private String resultLabel(String id) {
+        if (calculatorError() != null) return "—";
+        var result = LevelCalculator.calculate(calculatorLevel("calculatorCurrent"),
+                calculatorLevel("calculatorTarget"), calculatorDiscount(), calculatorMode());
+        return switch (id) {
+            case "calculatorDifference" -> Integer.toString(result.levels());
+            case "calculatorBlocks" -> RewardMessageParser.whole(result.blocks());
+            case "calculatorMoney" -> GoalAmount.format(result.money());
+            default -> "";
+        };
+    }
+
+    private DropdownBounds calculatorInputBounds(String id, int rowY) {
+        boolean target = id.equals("calculatorTarget");
+        int x = cardX() + 12;
+        int w = cardWidth() - 24;
+        int y = rowY + 30;
+        if (cardWidth() < 280) {
+            if (target) y += 48;
+        } else {
+            w = (w - 12) / 2;
+            if (target) x += w + 12;
+        }
+        return new DropdownBounds(x, y, w, 22);
+    }
+
+    private void renderCalculatorInput(GuiGraphicsExtractor g, String id, String title,
+                                       int rowY, int mouseX, int mouseY) {
+        var box = calculatorInputBounds(id, rowY);
+        g.text(font, fit(title, box.width), box.x, box.y - 17, TEXT);
+        renderControl(g, "value:" + id, box.x, box.y, box.width, box.height, mouseX, mouseY);
+        String text = calculatorText(id);
+        boolean focused = id.equals(editingId);
+        String shown = text.isEmpty() && !focused ? "—" : text + (focused ? "_" : "");
+        g.centeredText(font, shown, box.x + box.width / 2, box.y + 7,
+                focused && calculatorSelectAll ? ACCENT : TEXT);
     }
 
     private void renderReset(GuiGraphicsExtractor g, String id, int cy, int mouseX, int mouseY) {
@@ -607,6 +670,7 @@ public class EvoConfigScreen extends Screen {
             case "resetBossRewards" -> "evoassist.ui.resetBossRewards.description";
             case "resetBossTokens" -> "evoassist.ui.resetBossTokens.description";
             case "resetClan" -> "evoassist.ui.resetClan.description";
+            case "resetKills" -> "evoassist.ui.resetKills.description";
                 default -> isGoal(pendingResetId) ? "evoassist.ui.goalChangeWarning" : "";
             };
             if (!key.isEmpty()) {
@@ -647,6 +711,8 @@ public class EvoConfigScreen extends Screen {
 
     private static void addResetStatistics(List<String> lines, String id) {
         switch (id) {
+            case "resetKills" -> lines.add(tr("evoassist.hud.kills")
+                    + RewardMessageParser.whole(EvoAssistClient.rewardStatistics.current().kills));
             case "resetMining" -> {
                 var counter = BlockProfitPerHour.getInstance();
                 if (counter == null) return;
@@ -726,6 +792,7 @@ public class EvoConfigScreen extends Screen {
             case "resetBossRewards" -> tr("evoassist.ui.resetBossRewards.subject");
             case "resetBossTokens" -> tr("evoassist.ui.resetBossTokens.subject");
             case "resetClan" -> tr("evoassist.ui.resetClan.subject");
+            case "resetKills" -> tr("evoassist.page.kills.title");
             default -> rows().stream().filter(row -> row.id.equals(subjectId))
                     .map(row -> row.title).findFirst().orElse(tr("evoassist.ui.setting"));
         };
@@ -786,6 +853,7 @@ public class EvoConfigScreen extends Screen {
             case "resetBossRewards" -> EvoAssistClient.rewardStatistics != null && EvoAssistClient.rewardStatistics.hasBossRewardStatistics();
             case "resetBossTokens" -> EvoAssistClient.rewardStatistics != null && EvoAssistClient.rewardStatistics.hasBossTokenStatistics();
             case "resetClan" -> EvoAssistClient.rewardStatistics != null && EvoAssistClient.rewardStatistics.hasClanStatistics();
+            case "resetKills" -> EvoAssistClient.rewardStatistics != null && EvoAssistClient.rewardStatistics.hasKillStatistics();
             default -> true;
         };
     }
@@ -814,12 +882,11 @@ public class EvoConfigScreen extends Screen {
             case "resetGoals" -> resetGoals();
             case "resetClanGoals" -> {
                 AdditionalGoals.getInstance().reset(true);
-                MiningGoals.getInstance().clearNotices(true);
                 feedback = tr("evoassist.ui.clanGoalsReset");
                 feedbackUntil = System.currentTimeMillis() + 2500;
                 startResetFlash(id);
             }
-            case "resetBossRewards", "resetBossTokens", "resetClan" -> resetRewards(id);
+            case "resetBossRewards", "resetBossTokens", "resetClan", "resetKills" -> resetRewards(id);
             default -> resetValue(id);
         }
     }
@@ -829,43 +896,11 @@ public class EvoConfigScreen extends Screen {
         resetFlashAt = System.currentTimeMillis();
     }
 
-    private static boolean editorEnabled(String id) {
-        return enabled(switch (id) {
-            case "editMining" -> "miningWidget";
-            case "editBlockGoal" -> "blockGoalWidget";
-            case "editTimeGoal" -> "timeGoalWidget";
-            case "editMoneyGoal" -> "moneyGoalWidget";
-            case "editShardGoal" -> "shardGoalWidget";
-            case "editGoalNotice" -> "goalNotifications";
-            case "editBosses" -> "bossWidget";
-            case "editBossTokens" -> "bossTokensWidget";
-            case "editClan" -> "clanWidget";
-            case "editClanPointsGoal" -> "clanPointsGoalWidget";
-            case "editClanGoldGoal" -> "clanGoldGoalWidget";
-            case "editClanExperienceGoal" -> "clanExperienceGoalWidget";
-            case "editClanGoalNotice" -> "clanGoalNotifications";
-            case "editChatTabs" -> "chatTabs";
-            default -> "";
-        });
-    }
 
     private static boolean enabled(String id) {
         return switch (id) {
-            case "clickerEnabled" -> ConfigAutoclicker.autoclickerEnabled;
-            case "miningWidget" -> ConfigMining.bphWidgetToggle;
-            case "blockGoalWidget" -> ConfigMining.blockGoalWidgetEnabled;
-            case "timeGoalWidget" -> ConfigMining.timeGoalWidgetEnabled;
-            case "moneyGoalWidget" -> ConfigMining.moneyGoalWidgetEnabled;
-            case "shardGoalWidget" -> ConfigMining.shardGoalWidgetEnabled;
-            case "clanPointsGoalWidget" -> ConfigClan.pointsGoalWidgetEnabled;
-            case "clanGoldGoalWidget" -> ConfigClan.goldGoalWidgetEnabled;
-            case "clanExperienceGoalWidget" -> ConfigClan.experienceGoalWidgetEnabled;
             case "clanGoalNotifications" -> ConfigClan.goalNotifications;
             case "goalNotifications" -> ConfigMining.goalNotifications;
-            case "bossWidget" -> ConfigBosses.widgetEnabled;
-            case "bossTokensWidget" -> ConfigBosses.tokensWidgetEnabled;
-            case "clanWidget" -> ConfigClan.widgetEnabled;
-            case "chatTabs" -> ConfigChat.chatTabsToggle;
             default -> false;
         };
     }
@@ -888,26 +923,22 @@ public class EvoConfigScreen extends Screen {
         return type != null && Arrays.asList(ConfigMining.bphWidgetAllowed).contains(type);
     }
 
-    private static String choice(String id) {
+    private String choice(String id) {
         return switch (id) {
-            case "clickerButton" -> ConfigAutoclicker.autoclickerButton.toString();
-            case "clickerMode" -> ConfigAutoclicker.autoclickerActivation.toString();
+            case "calculatorMode" -> calculatorMode() == LevelCalculator.Mode.EVO_FAST ? "Evo Fast" : "Evo";
+            case "calculatorDiscount" -> calculatorDiscount() == 0 ? tr("evoassist.calculator.noDiscount") : calculatorDiscount() + "%";
             case "chatOrientation" -> ConfigChat.chatTabsOrientation.toString();
             default -> "";
         };
     }
 
     private static KeyMapping bindingFor(String id) {
-        return switch (id) {
-            case "menuKey" -> EvoAssistClient.menuKey();
-            case "clickerModeKey" -> EvoAssistClient.clickerModeKey();
-            default -> EvoAssistClient.clickerKey();
-        };
+        if (!id.equals("menuKey")) throw new IllegalArgumentException("Unknown key binding: " + id);
+        return EvoAssistClient.menuKey();
     }
 
     private static int value(String id) {
         return switch (id) {
-            case "cps" -> ConfigAutoclicker.autoclickerCps;
             case "menuOpacity" -> ConfigVisual.menuOpacity;
             case "goalNoticeDuration" -> ConfigVisual.goalNoticeDurationSeconds;
             case "blockGoal" -> ConfigMining.blockGoalTarget;
@@ -918,7 +949,6 @@ public class EvoConfigScreen extends Screen {
 
     private static void setValue(String id, int newValue) {
         switch (id) {
-            case "cps" -> ConfigAutoclicker.autoclickerCps = newValue;
             case "menuOpacity" -> ConfigVisual.menuOpacity = Math.clamp(newValue, 10, 100);
             case "goalNoticeDuration" -> ConfigVisual.goalNoticeDurationSeconds = Math.clamp(newValue, 1, 60);
             case "blockGoal" -> {
@@ -935,7 +965,6 @@ public class EvoConfigScreen extends Screen {
     private void resetValue(String id) {
         if (amountType(id) != null) setAmount(id, "0");
         switch (id) {
-            case "cps" -> setValue(id, 10);
             case "menuOpacity" -> setValue(id, 90);
             case "goalNoticeDuration" -> setValue(id, 5);
             case "blockGoal", "timeGoal" -> setValue(id, 0);
@@ -949,45 +978,30 @@ public class EvoConfigScreen extends Screen {
 
     private void toggle(String id) {
         switch (id) {
-            case "clickerEnabled" -> {
-                ConfigAutoclicker.autoclickerEnabled = !ConfigAutoclicker.autoclickerEnabled;
-                if (!ConfigAutoclicker.autoclickerEnabled) Clicker.stop();
-            }
-            case "miningWidget" -> ConfigMining.bphWidgetToggle = !ConfigMining.bphWidgetToggle;
-            case "blockGoalWidget" -> ConfigMining.blockGoalWidgetEnabled = !ConfigMining.blockGoalWidgetEnabled;
-            case "timeGoalWidget" -> ConfigMining.timeGoalWidgetEnabled = !ConfigMining.timeGoalWidgetEnabled;
-            case "moneyGoalWidget" -> ConfigMining.moneyGoalWidgetEnabled = !ConfigMining.moneyGoalWidgetEnabled;
-            case "shardGoalWidget" -> ConfigMining.shardGoalWidgetEnabled = !ConfigMining.shardGoalWidgetEnabled;
-            case "clanPointsGoalWidget" -> ConfigClan.pointsGoalWidgetEnabled = !ConfigClan.pointsGoalWidgetEnabled;
-            case "clanGoldGoalWidget" -> ConfigClan.goldGoalWidgetEnabled = !ConfigClan.goldGoalWidgetEnabled;
-            case "clanExperienceGoalWidget" -> ConfigClan.experienceGoalWidgetEnabled = !ConfigClan.experienceGoalWidgetEnabled;
             case "clanGoalNotifications" -> ConfigClan.goalNotifications = !ConfigClan.goalNotifications;
             case "goalNotifications" -> ConfigMining.goalNotifications = !ConfigMining.goalNotifications;
-            case "bossWidget" -> ConfigBosses.widgetEnabled = !ConfigBosses.widgetEnabled;
-            case "bossTokensWidget" -> ConfigBosses.tokensWidgetEnabled = !ConfigBosses.tokensWidgetEnabled;
-            case "clanWidget" -> ConfigClan.widgetEnabled = !ConfigClan.widgetEnabled;
-            case "chatTabs" -> {
-                ConfigChat.chatTabsToggle = !ConfigChat.chatTabsToggle;
-                minecraft.gui.hud.getChat().rescaleChat();
-            }
         }
         save();
     }
 
     private void selectOption(String id) {
+        if (id.equals("calculatorModeEvo") || id.equals("calculatorModeEvoFast")) {
+            ConfigCalculator.mode = id.equals("calculatorModeEvoFast") ? LevelCalculator.Mode.EVO_FAST : LevelCalculator.Mode.EVO;
+            openDropdown = null;
+            save();
+            return;
+        }
+        if (id.startsWith("calculatorDiscount")) {
+            int discount = Integer.parseInt(id.substring("calculatorDiscount".length()));
+            if (LevelCalculator.discounts(calculatorLevel("calculatorTarget")).contains(discount))
+                ConfigCalculator.discount = discount;
+            openDropdown = null;
+            save();
+            return;
+        }
         switch (id) {
             case "chatHorizontal" -> ConfigChat.chatTabsOrientation = ConfigChat.Orientation.HORIZONTAL;
             case "chatVertical" -> ConfigChat.chatTabsOrientation = ConfigChat.Orientation.VERTICAL;
-            case "buttonLeft" -> ConfigAutoclicker.autoclickerButton = ConfigAutoclicker.ENUMAutoClickerButton.LMB;
-            case "buttonRight" -> ConfigAutoclicker.autoclickerButton = ConfigAutoclicker.ENUMAutoClickerButton.RMB;
-            case "modeClick" -> {
-                Clicker.stop();
-                ConfigAutoclicker.autoclickerActivation = ConfigAutoclicker.ENUMAutoClickerActivation.SWITCH;
-            }
-            case "modeHold" -> {
-                Clicker.stop();
-                ConfigAutoclicker.autoclickerActivation = ConfigAutoclicker.ENUMAutoClickerActivation.HOLD;
-            }
             default -> {
                 ConfigMining.bphAllowEnum type = allowedType(id);
                 if (type != null) {
@@ -1029,6 +1043,7 @@ public class EvoConfigScreen extends Screen {
                 case "resetBossRewards" -> EvoAssistClient.rewardStatistics.resetBossRewards();
                 case "resetBossTokens" -> EvoAssistClient.rewardStatistics.resetBossTokens();
                 case "resetClan" -> EvoAssistClient.rewardStatistics.resetClan();
+                case "resetKills" -> EvoAssistClient.rewardStatistics.resetKills();
                 default -> throw new IllegalArgumentException(id);
             }
             feedback = tr("evoassist.ui.statisticsReset");
@@ -1045,7 +1060,9 @@ public class EvoConfigScreen extends Screen {
 
     private void startEditing(String id) {
         editingId = id;
-        editingText = "";
+        editingText = calculatorInput(id) ? id.equals("calculatorCurrent")
+                ? ConfigCalculator.currentLevel : ConfigCalculator.targetLevel : "";
+        calculatorSelectAll = calculatorInput(id);
     }
 
     private static AdditionalGoals.Type amountType(String id) {
@@ -1111,6 +1128,15 @@ public class EvoConfigScreen extends Screen {
     private boolean commitEditing() {
         if (editingId == null) return !hasConfirmation();
         String id = editingId;
+        if (calculatorInput(id)) {
+            if (id.equals("calculatorCurrent")) ConfigCalculator.currentLevel = editingText;
+            else ConfigCalculator.targetLevel = editingText;
+            ConfigCalculator.discount = calculatorDiscount();
+            editingId = null;
+            calculatorSelectAll = false;
+            save();
+            return true;
+        }
         try {
             if (!editingText.isEmpty()) {
                 String target;
@@ -1183,12 +1209,6 @@ public class EvoConfigScreen extends Screen {
             return true;
         }
 
-        if (inside(mx, my, widgetEditorButtonX(), widgetEditorButtonY(), 20, 20)) {
-            if (!prepareControlClick()) return true;
-            save();
-            minecraft.gui.setScreen(new WidgetScreen(this));
-            return true;
-        }
         int navY = top() + 48;
         for (Page item : Page.values()) {
             if (inside(mx, my, left() + 7, navY, sidebarWidth() - 14, navHeight())) {
@@ -1216,7 +1236,17 @@ public class EvoConfigScreen extends Screen {
                 int cx = controlX();
                 int cw = controlWidth();
                 switch (row.kind) {
-                    case SECTION -> { }
+                    case SECTION, INFO, RESULT -> { }
+                    case LEVELS -> {
+                        for (String id : List.of("calculatorCurrent", "calculatorTarget")) {
+                            var box = calculatorInputBounds(id, y);
+                            if (inside(mx, my, box.x, box.y, box.width, box.height)) {
+                                if (!prepareControlClick()) return true;
+                                startEditing(id);
+                                break;
+                            }
+                        }
+                    }
                     case TOGGLE -> {
                         if (inside(mx, my, cx + cw - 32, cy + 2, 32, 14)) {
                             if (!prepareControlClick()) return true;
@@ -1242,24 +1272,13 @@ public class EvoConfigScreen extends Screen {
                             requestReset(row.id);
                         }
                     }
-                    case EDITOR -> {
-                        if (editorEnabled(row.id) && inside(mx, my, cx, cy - 2, cw, 22)) {
-                            if (!prepareControlClick()) return true;
-                            save();
-                            minecraft.gui.setScreen(new WidgetScreen(this));
-                        }
-                    }
                     case NUMBER, AMOUNT -> {
-                        int boxX = cx + cw - 110;
-                        if (resetAvailable(row.id) && inside(mx, my, resetX(), cy - 2, 39, 22)) {
-                            if (!prepareControlClick()) return true;
-                            requestReset(row.id);
-                        } else if (inside(mx, my, boxX, cy - 2, 68, 22)) {
+                        if (inside(mx, my, cx, cy - 2, cw, 22)) {
                             if (!prepareControlClick()) return true;
                             startEditing(row.id);
                         }
                     }
-                    case SLIDER, CPS -> {
+                    case SLIDER -> {
                         if (inside(mx, my, resetX(), cy - 2, 39, 22)) {
                             if (!prepareControlClick()) return true;
                             requestReset(row.id);
@@ -1339,6 +1358,28 @@ public class EvoConfigScreen extends Screen {
             return true;
         }
         if (editingId != null) {
+            if (calculatorInput(editingId)) {
+                boolean control = (event.modifiers() & GLFW.GLFW_MOD_CONTROL) != 0;
+                if (control && event.key() == GLFW.GLFW_KEY_A) {
+                    calculatorSelectAll = true;
+                    return true;
+                }
+                if (control && event.key() == GLFW.GLFW_KEY_V) {
+                    String pasted = minecraft.keyboardHandler.getClipboard().strip();
+                    String next = calculatorSelectAll ? pasted : editingText + pasted;
+                    if (next.matches("[0-9]{0,3}")) {
+                        editingText = next;
+                        calculatorSelectAll = false;
+                    }
+                    return true;
+                }
+                if (event.key() == GLFW.GLFW_KEY_DELETE || event.key() == GLFW.GLFW_KEY_BACKSPACE) {
+                    if (calculatorSelectAll || event.key() == GLFW.GLFW_KEY_DELETE) editingText = "";
+                    else if (!editingText.isEmpty()) editingText = editingText.substring(0, editingText.length() - 1);
+                    calculatorSelectAll = false;
+                    return true;
+                }
+            }
             if (event.key() == GLFW.GLFW_KEY_ENTER || event.key() == GLFW.GLFW_KEY_KP_ENTER
                     || event.key() == GLFW.GLFW_KEY_TAB) {
                 commitEditing();
@@ -1372,6 +1413,14 @@ public class EvoConfigScreen extends Screen {
         if (hasConfirmation()) return true;
         if (editingId != null) {
             int cp = event.codepoint();
+            if (calculatorInput(editingId)) {
+                if (cp >= '0' && cp <= '9') {
+                    if (calculatorSelectAll) editingText = "";
+                    calculatorSelectAll = false;
+                    if (editingText.length() < 3) editingText += (char) cp;
+                }
+                return true;
+            }
             boolean amount = amountType(editingId) != null;
             boolean allowed = cp >= '0' && cp <= '9' || amount && (cp == '.' || "KMBTQkmbtq".indexOf(cp) >= 0);
             int maxLength = editingId.equals("timeGoal") ? 4 : amount ? 32 : 7;

@@ -18,6 +18,8 @@ fabricApi {
 }
 
 repositories {
+    maven { url = "https://jitpack.io"; content { includeGroup "com.github.evo-plus" } }
+    maven { url = "https://api.modrinth.com/maven"; content { includeGroup "maven.modrinth" } }
     mavenCentral()
     maven { url = "https://maven.terraformersmc.com/releases/" }
     // Add repositories to retrieve artifacts from in here.
@@ -35,6 +37,11 @@ repositories {
 }
 
 dependencies {
+    // API classes are provided by the required EvoPlus mod at runtime.
+    compileOnly "com.github.evo-plus:evo-plus-api:${project.evo_plus_api_version}"
+    // Development runtime only: these mods are installed separately by players.
+    runtimeOnly "maven.modrinth:evoplus:${project.evo_plus_min_version}"
+    runtimeOnly "net.fabricmc:fabric-language-kotlin:${project.fabric_kotlin_version}"
     compileOnly "com.terraformersmc:modmenu:20.0.3"
     runtimeOnly "com.terraformersmc:modmenu:20.0.3"
     // To change the versions see the gradle.properties file
@@ -57,12 +64,14 @@ processResources {
     inputs.property "version", project.version
     inputs.property "minecraft_version", project.minecraft_version
     inputs.property "loader_version", project.loader_version
+    inputs.property "evo_plus_min_version", project.evo_plus_min_version
     filteringCharset "UTF-8"
 
     filesMatching("fabric.mod.json") {
         expand "version": project.version,
                 "minecraft_version": project.minecraft_version,
-                "loader_version": project.loader_version
+                "loader_version": project.loader_version,
+                "evo_plus_min_version": project.evo_plus_min_version
     }
 
     // The English JSON is also the fallback for pure Java goal/statistics tools.
@@ -102,7 +111,7 @@ java {
 // These checks exercise parsing and persistence without starting Minecraft.
 def compileRewardChecks = tasks.register('compileRewardChecks', JavaCompile) {
     source = fileTree('checks') { include '**/*.java' }
-    classpath = sourceSets.main.output
+    classpath = sourceSets.main.output + configurations.compileClasspath
     destinationDirectory = layout.buildDirectory.dir('classes/rewardChecks')
     options.encoding = 'UTF-8'
     options.release = targetJavaVersion
@@ -116,6 +125,21 @@ tasks.register('checkRewardStatistics', JavaExec) {
 }
 
 tasks.named('check') { dependsOn 'checkRewardStatistics' }
+
+tasks.register('checkLevelCalculator', JavaExec) {
+    dependsOn compileRewardChecks
+    classpath = files(sourceSets.main.output, compileRewardChecks.flatMap { it.destinationDirectory })
+    mainClass = 'com.konzy.evo_assist.client.features.calculator.LevelCalculatorChecks'
+}
+
+tasks.register('checkPlayerKills', JavaExec) {
+    dependsOn compileRewardChecks
+    classpath = files(sourceSets.main.output, compileRewardChecks.flatMap { it.destinationDirectory })
+    mainClass = 'com.konzy.evo_assist.client.features.rewards.PlayerKillChecks'
+    args layout.buildDirectory.dir('killChecks').get().asFile.absolutePath
+}
+
+tasks.named('check') { dependsOn 'checkLevelCalculator', 'checkPlayerKills' }
 
 tasks.register('checkAdditionalGoals', JavaExec) {
     dependsOn compileRewardChecks
@@ -150,6 +174,17 @@ tasks.register('checkMiningStatistics', JavaExec) {
 }
 
 tasks.named('check') { dependsOn 'checkMiningStatistics' }
+
+tasks.register('checkEvoPlusIntegration', JavaExec) {
+    dependsOn compileRewardChecks
+    classpath = files(sourceSets.main.output, compileRewardChecks.flatMap { it.destinationDirectory }, configurations.compileClasspath)
+    mainClass = 'com.konzy.evo_assist.client.compat.evoplus.EvoPlusIntegrationChecks'
+    args layout.buildDirectory.dir('evoPlusChecks').get().asFile.absolutePath
+    workingDir layout.buildDirectory.dir('evoPlusChecks').get().asFile
+    doFirst { workingDir.mkdirs() }
+}
+
+tasks.named('check') { dependsOn 'checkEvoPlusIntegration' }
 
 jar {
     from("LICENSE.txt") {

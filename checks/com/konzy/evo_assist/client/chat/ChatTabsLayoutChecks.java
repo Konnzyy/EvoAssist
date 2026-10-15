@@ -58,6 +58,27 @@ public final class ChatTabsLayoutChecks {
             check(p.y() + p.height() == 526, "Default position remains anchored above the input");
         }
         check(new ChatTabsLayout(List.of(), List.of(), false).at(0, 0) == null, "Empty layout has no click targets");
+        for (var layout : List.of(horizontal, vertical)) {
+            for (double scale : new double[] {0.3, 1, 1.5, 5}) {
+                for (double angle : new double[] {0, Math.PI / 6}) {
+                    double a = Math.cos(angle) * scale, b = Math.sin(angle) * scale;
+                    var area = new ChatTabsHitArea(layout, a, b, -b, a, 73, 148);
+                    for (var cell : layout.cells()) {
+                        double x = cell.x() + cell.width() / 2.0, y = cell.y() + cell.height() / 2.0;
+                        check(area.at(a * x - b * y + 73, b * x + a * y + 148) == cell,
+                                "EvoPlus position, scale and rotation keep each button clickable");
+                    }
+                    check(area.at(a * -1 + 73, b * -1 + 148) == null,
+                            "Screen clicks outside the transformed panel are not consumed");
+                }
+            }
+        }
+        var area = new ChatTabsHitArea(horizontal, 1.5, 0, 0, 1.5, 31, 65);
+        check(area.at(31 + 25 * 1.5, 65 + 5 * 1.5) == null, "Transformed gaps remain unclickable");
+        check(area.at(Double.NaN, 65) == null && area.at(31, Double.POSITIVE_INFINITY) == null,
+                "Non-finite mouse coordinates cannot select a control");
+        check(new ChatTabsHitArea(horizontal, 0, 0, 0, 0, 31, 65).at(31, 65) == null,
+                "An invalid transform cannot select a control");
         System.out.println("Chat layout checks passed: " + checks);
     }
 }

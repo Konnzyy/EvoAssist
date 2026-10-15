@@ -10,6 +10,11 @@ import com.teamresourceful.resourcefulconfig.api.annotations.ConfigOption;
 
 @Category("Визуал")
 public class ConfigVisual {
+    // Disable widgets once on upgrade; subsequent visibility belongs to EvoPlus.
+    @ConfigOption.Hidden
+    @ConfigEntry(id = "widgetsInitializedForEvoPlus")
+    public static boolean widgetsInitializedForEvoPlus = false;
+
     @ConfigOption.Range(min = 10, max = 100)
     @ConfigOption.Slider
     @ConfigEntry(
